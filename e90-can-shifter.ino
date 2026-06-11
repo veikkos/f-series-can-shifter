@@ -8,6 +8,9 @@
 SInput s_input;
 SGws s_gws;
 
+// Gamepad sync attempts before forcing the lever state to match the game
+static const uint8_t SYNC_ATTEMPT_LIMIT = 3;
+
 // CRC8, polynomial 0x1D, init 0x00, final xor 0x70
 static uint8_t crc8(const uint8_t* data, uint8_t len) {
     uint8_t crc = 0x00;
@@ -166,7 +169,7 @@ void sendJoystick() {
     uint32_t current = millis();
 
     if (s_gws.shifter_manual != gameShifterManual()) {
-        if (s_gws.attempts == 3) {
+        if (s_gws.attempts == SYNC_ATTEMPT_LIMIT) {
             if (!CONFIGURATION_MODE) {
                 s_gws.gear = GWS_TRANSITIONAL;
                 s_gws.attempts = 0;
@@ -180,7 +183,7 @@ void sendJoystick() {
     }
 
     if (leverGear() != gameGear()) {
-        if (s_gws.attempts == 3) {
+        if (s_gws.attempts == SYNC_ATTEMPT_LIMIT) {
             s_gws.gear = gameGear();
             s_gws.attempts = 0;
         } else if (current - lastAttempt >= 1000) {

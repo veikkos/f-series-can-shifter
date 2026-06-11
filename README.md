@@ -40,6 +40,7 @@ Set `CONFIGURATION_MODE` to `true` in [config.h](config.h) and flash, then bind 
 
 - Automatic gearbox Drive: push the selector down from N
 - Automatic gearbox Reverse: push the selector up from N
+- Park: press the selector's park button
 - Shift to neutral: shift up from D
 - Gearbox Automatic/Sequential switch: push sideways from D
 - Shift up: push the selector down

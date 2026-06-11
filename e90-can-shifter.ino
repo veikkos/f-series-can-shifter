@@ -23,12 +23,13 @@ static uint8_t crc8(const uint8_t* data, uint8_t len) {
     return crc ^ 0x70;
 }
 
-// The game's current gear reduced to R/N/D
+// The game's current gear as a lever gear
 static GwsGear gameGear() {
     switch (s_input.currentGear) {
+        case PARK:    return GWS_PARK;
         case REVERSE: return GWS_REVERSE;
         case DRIVE:   return GWS_DRIVE;
-        default:      return GWS_NEUTRAL; // NEUTRAL, PARK
+        default:      return GWS_NEUTRAL; // NEUTRAL
     }
 }
 
@@ -40,6 +41,7 @@ static GwsGear leverGear() {
 // Gamepad button that engages the given gear in the game
 static GamepadButton gearButton(GwsGear gear) {
     switch (gear) {
+        case GWS_PARK:    return BTN_GEAR_PARK;
         case GWS_REVERSE: return BTN_GEAR_REVERSE;
         case GWS_DRIVE:   return BTN_GEAR_DRIVE;
         default:          return BTN_GEAR_NEUTRAL;
@@ -48,10 +50,6 @@ static GamepadButton gearButton(GwsGear gear) {
 
 static bool gameShifterManual() {
     return s_input.explicitGear != NONE;
-}
-
-static bool gameInPark() {
-    return s_input.currentGear == PARK;
 }
 
 void sendBacklight() {
@@ -67,7 +65,7 @@ void sendGear() {
 
     frame[1] = counter;
 
-    if (gameInPark() && s_gws.gear == GWS_NEUTRAL) {
+    if (s_gws.gear == GWS_PARK) {
         frame[2] = DISPLAY_PARK;
     } else if (s_gws.gear == GWS_REVERSE) {
         frame[2] = DISPLAY_REVERSE;
@@ -107,7 +105,7 @@ void sendCanBus() {
 
 void handleGwsPosition(const uint8_t* data) {
     static uint8_t currentPosition = LEVER_CENTRE_SIDE;
-    static uint8_t currentCounter = 0;
+    static int currentCounter = -1;
 
     uint8_t readerCounter = data[1];
     if (readerCounter == currentCounter) {
@@ -117,12 +115,12 @@ void handleGwsPosition(const uint8_t* data) {
     uint8_t position = data[2];
 
     if (currentPosition == LEVER_CENTRE_SIDE && position == LEVER_CENTRE_MIDDLE) {
-        s_gws.attempts = 0;
+        s_gws.mode_attempts = 0;
         s_gws.shifter_manual = false;
     }
 
     if (currentPosition == LEVER_CENTRE_MIDDLE && position == LEVER_CENTRE_SIDE) {
-        s_gws.attempts = 0;
+        s_gws.mode_attempts = 0;
         s_gws.shifter_manual = true;
     }
 
@@ -130,23 +128,24 @@ void handleGwsPosition(const uint8_t* data) {
         switch (position) {
             case LEVER_UP:
             case LEVER_UP_TWO:
-                if (s_gws.gear == GWS_NEUTRAL) {
-                    s_gws.attempts = 0;
+                // Leaving park behaves like leaving neutral
+                if (s_gws.gear == GWS_NEUTRAL || s_gws.gear == GWS_PARK) {
+                    s_gws.gear_attempts = 0;
                     s_gws.gear = GWS_REVERSE;
                 }
                 if (leverGear() == GWS_DRIVE) {
-                    s_gws.attempts = 0;
+                    s_gws.gear_attempts = 0;
                     s_gws.gear = GWS_NEUTRAL;
                 }
                 break;
             case LEVER_DOWN:
             case LEVER_DOWN_TWO:
-                if (s_gws.gear == GWS_NEUTRAL) {
-                    s_gws.attempts = 0;
+                if (s_gws.gear == GWS_NEUTRAL || s_gws.gear == GWS_PARK) {
+                    s_gws.gear_attempts = 0;
                     s_gws.gear = GWS_DRIVE;
                 }
                 if (s_gws.gear == GWS_REVERSE) {
-                    s_gws.attempts = 0;
+                    s_gws.gear_attempts = 0;
                     s_gws.gear = GWS_NEUTRAL;
                 }
                 break;
@@ -163,9 +162,9 @@ void handleGwsPosition(const uint8_t* data) {
         }
     }
 
-    if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != GWS_NEUTRAL)) {
-        s_gws.attempts = 0;
-        s_gws.gear = GWS_NEUTRAL;
+    if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != GWS_PARK)) {
+        s_gws.gear_attempts = 0;
+        s_gws.gear = GWS_PARK;
     }
 
     currentPosition = position;
@@ -174,41 +173,43 @@ void handleGwsPosition(const uint8_t* data) {
 
 // Drive the game towards the lever's selected gear / mode via gamepad buttons
 void sendJoystick() {
-    static uint32_t lastAttempt = 0;
+    static uint32_t lastModeAttempt = 0;
+    static uint32_t lastGearAttempt = 0;
     uint32_t current = millis();
 
     if (s_gws.shifter_manual != gameShifterManual()) {
-        if (s_gws.attempts == SYNC_ATTEMPT_LIMIT) {
+        if (s_gws.mode_attempts == SYNC_ATTEMPT_LIMIT) {
             if (!CONFIGURATION_MODE) {
                 s_gws.gear = GWS_TRANSITIONAL;
-                s_gws.attempts = 0;
+                s_gws.mode_attempts = 0;
             }
-        } else if (current - lastAttempt >= 1000) {
+        } else if (current - lastModeAttempt >= 1000) {
             gamepadPress(BTN_MODE_TOGGLE);
             gamepadRelease(BTN_MODE_TOGGLE);
-            s_gws.attempts++;
-            lastAttempt = current;
+            s_gws.mode_attempts++;
+            lastModeAttempt = current;
         }
     }
 
     if (leverGear() != gameGear()) {
-        if (s_gws.attempts == SYNC_ATTEMPT_LIMIT) {
+        if (s_gws.gear_attempts == SYNC_ATTEMPT_LIMIT) {
             s_gws.gear = gameGear();
-            s_gws.attempts = 0;
-        } else if (current - lastAttempt >= 1000) {
+            s_gws.gear_attempts = 0;
+        } else if (current - lastGearAttempt >= 1000) {
             GamepadButton button = gearButton(leverGear());
 
             gamepadRelease(BTN_GEAR_REVERSE);
             gamepadRelease(BTN_GEAR_NEUTRAL);
             gamepadRelease(BTN_GEAR_DRIVE);
+            gamepadRelease(BTN_GEAR_PARK);
 
             gamepadPress(button);
             if (leverGear() == GWS_NEUTRAL) {
                 gamepadRelease(button); // neutral is a momentary tap
             }
 
-            s_gws.attempts++;
-            lastAttempt = current;
+            s_gws.gear_attempts++;
+            lastGearAttempt = current;
         }
     }
 }

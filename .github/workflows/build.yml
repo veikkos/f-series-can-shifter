@@ -1,0 +1,66 @@
+name: Arduino Build
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-micro-mcp:
+    runs-on: ubuntu-latest
+    name: Build for Arduino Micro with MCP2515 SPI
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v1
+
+    - name: Install Arduino AVR platform
+      run: |
+        arduino-cli config init
+        arduino-cli config set library.enable_unsafe_install true
+        arduino-cli core update-index
+        arduino-cli core install arduino:avr
+
+    - name: Install required libraries
+      run: |
+        arduino-cli lib install "mcp_can"
+        arduino-cli lib install --git-url https://github.com/MHeironimus/ArduinoJoystickLibrary.git
+
+    - name: Build for Arduino Micro
+      run: |
+        arduino-cli compile --fqbn arduino:avr:micro .
+
+  build-teensy-flexcan:
+    runs-on: ubuntu-latest
+    name: Build for Teensy 4.1 with built-in FlexCAN
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Arduino CLI
+      uses: arduino/setup-arduino-cli@v1
+
+    - name: Install Teensy platform
+      run: |
+        arduino-cli config init
+        arduino-cli config add board_manager.additional_urls https://www.pjrc.com/teensy/package_teensy_index.json
+        arduino-cli core update-index
+        arduino-cli core install teensy:avr
+
+    - name: Select FlexCAN adapter
+      # Teensy platform.txt doesn't honor compiler.cpp.extra_flags, so flip the define in source.
+      run: |
+        sed -i 's|^#define USE_MCP_CAN_SPI$|//#define USE_MCP_CAN_SPI|' config.h
+        sed -i 's|^//#define USE_FLEXCAN_T4$|#define USE_FLEXCAN_T4|' config.h
+        grep -q '^#define USE_FLEXCAN_T4$' config.h
+
+    - name: Build for Teensy 4.1
+      # USB type with a joystick is required for the gamepad output.
+      run: |
+        arduino-cli compile --fqbn teensy:avr:teensy41:usb=serialhid .

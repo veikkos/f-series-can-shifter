@@ -23,7 +23,7 @@ static uint8_t crc8(const uint8_t* data, uint8_t len) {
     return crc ^ 0x70;
 }
 
-// The game's current gear reduced to R/N/D.
+// The game's current gear reduced to R/N/D
 static GwsGear gameGear() {
     switch (s_input.currentGear) {
         case REVERSE: return GWS_REVERSE;
@@ -32,9 +32,18 @@ static GwsGear gameGear() {
     }
 }
 
-// The lever's gear, with the transient TRANSITIONAL state counted as DRIVE.
+// The lever's gear, with the transient TRANSITIONAL state counted as DRIVE
 static GwsGear leverGear() {
     return s_gws.gear == GWS_TRANSITIONAL ? GWS_DRIVE : s_gws.gear;
+}
+
+// Gamepad button that engages the given gear in the game
+static GamepadButton gearButton(GwsGear gear) {
+    switch (gear) {
+        case GWS_REVERSE: return BTN_GEAR_REVERSE;
+        case GWS_DRIVE:   return BTN_GEAR_DRIVE;
+        default:          return BTN_GEAR_NEUTRAL;
+    }
 }
 
 static bool gameShifterManual() {
@@ -187,18 +196,15 @@ void sendJoystick() {
             s_gws.gear = gameGear();
             s_gws.attempts = 0;
         } else if (current - lastAttempt >= 1000) {
-            // s_gws.gear (-1/0/1) maps to the reverse/neutral/drive button.
-            uint8_t gearToEngage = s_gws.gear + 1;
+            GamepadButton button = gearButton(leverGear());
 
             gamepadRelease(BTN_GEAR_REVERSE);
             gamepadRelease(BTN_GEAR_NEUTRAL);
             gamepadRelease(BTN_GEAR_DRIVE);
 
-            if (gearToEngage == BTN_GEAR_NEUTRAL) {
-                gamepadPress(gearToEngage);
-                gamepadRelease(gearToEngage);
-            } else {
-                gamepadPress(gearToEngage);
+            gamepadPress(button);
+            if (leverGear() == GWS_NEUTRAL) {
+                gamepadRelease(button); // neutral is a momentary tap
             }
 
             s_gws.attempts++;

@@ -5,49 +5,6 @@
 #include "can_adapter.h"
 #include "gamepad.h"
 
-enum GwsCanId : uint32_t {
-    GWS_ID_POSITION  = 0x197, // lever position report (RX)
-    GWS_ID_BACKLIGHT = 0x202, // backlight control (TX)
-    GWS_ID_DISPLAY   = 0x3FD, // gear-indicator update (TX)
-};
-
-enum GwsLeverPosition : uint8_t {
-    LEVER_CENTRE_MIDDLE = 0x0E,
-    LEVER_UP            = 0x1E, // towards front of car
-    LEVER_UP_TWO        = 0x2E,
-    LEVER_DOWN          = 0x3E, // towards back of car
-    LEVER_DOWN_TWO      = 0x4E,
-    LEVER_CENTRE_SIDE   = 0x7E,
-    LEVER_SIDE_UP       = 0x5E,
-    LEVER_SIDE_DOWN     = 0x6E,
-};
-
-static const uint8_t GWS_PARK_BUTTON_PRESSED = 0xD5;
-
-enum GwsDisplay : uint8_t {
-    DISPLAY_BLANK    = 0x00,
-    DISPLAY_PARK     = 0x20,
-    DISPLAY_REVERSE  = 0x40,
-    DISPLAY_NEUTRAL  = 0x60,
-    DISPLAY_DRIVE    = 0x80,
-    DISPLAY_DRIVE_MS = 0x81, // D, lever can move to M/S
-    DISPLAY_FLASH    = 0x08, // OR with the gear to flash it
-};
-
-static const uint8_t GWS_COUNTER_INVALID = 0x0F;
-
-static const uint8_t BACKLIGHT_FULL = 0xFF;
-static const uint8_t BACKLIGHT_OFF  = 0x00;
-
-enum GamepadButton : uint8_t {
-    BTN_GEAR_REVERSE = 0,
-    BTN_GEAR_NEUTRAL = 1,
-    BTN_GEAR_DRIVE   = 2,
-    BTN_MODE_TOGGLE  = 3,
-    BTN_PADDLE_UP    = 4,
-    BTN_PADDLE_DOWN  = 5,
-};
-
 SInput s_input;
 SGws s_gws;
 
@@ -80,6 +37,10 @@ static bool gameShifterManual() {
     return s_input.explicitGear != NONE;
 }
 
+static bool gameInPark() {
+    return s_input.currentGear == PARK;
+}
+
 void sendBacklight() {
     static uint8_t frame[2] = {BACKLIGHT_OFF, 0x00};
     bool lit = s_input.light_lowbeam || s_input.light_highbeam;
@@ -93,7 +54,9 @@ void sendGear() {
 
     frame[1] = counter;
 
-    if (s_gws.gear == -1) {
+    if (gameInPark() && s_gws.gear == 0) {
+        frame[2] = DISPLAY_PARK;
+    } else if (s_gws.gear == -1) {
         frame[2] = DISPLAY_REVERSE;
     } else if (s_gws.gear == 0) {
         frame[2] = DISPLAY_NEUTRAL;

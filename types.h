@@ -75,9 +75,17 @@ enum GamepadButton : uint8_t {
     BTN_PADDLE_DOWN  = 5,
 };
 
+// Gear the lever has selected.
+enum GwsGear : int8_t {
+    GWS_REVERSE      = -1,
+    GWS_NEUTRAL      = 0,
+    GWS_DRIVE        = 1,
+    GWS_TRANSITIONAL = 2, // momentary state while toggling auto/manual
+};
+
 // Physical gear-lever (GWS) state
 struct SGws {
-    int8_t gear = 0;            // -1 R, 0 N, 1 D, 2 transitional
+    GwsGear gear = GWS_NEUTRAL;
     bool shifter_manual = false;
     uint8_t attempts = 0;       // gamepad sync attempts before forcing the gear
 };

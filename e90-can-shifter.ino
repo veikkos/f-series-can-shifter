@@ -54,15 +54,15 @@ void sendGear() {
 
     frame[1] = counter;
 
-    if (gameInPark() && s_gws.gear == 0) {
+    if (gameInPark() && s_gws.gear == GWS_NEUTRAL) {
         frame[2] = DISPLAY_PARK;
-    } else if (s_gws.gear == -1) {
+    } else if (s_gws.gear == GWS_REVERSE) {
         frame[2] = DISPLAY_REVERSE;
-    } else if (s_gws.gear == 0) {
+    } else if (s_gws.gear == GWS_NEUTRAL) {
         frame[2] = DISPLAY_NEUTRAL;
-    } else if (s_gws.gear == 1) {
+    } else if (s_gws.gear == GWS_DRIVE) {
         frame[2] = DISPLAY_DRIVE_MS;
-    } else if (s_gws.gear == 2) {
+    } else if (s_gws.gear == GWS_TRANSITIONAL) {
         frame[2] = DISPLAY_DRIVE;
     }
 
@@ -117,24 +117,24 @@ void handleGwsPosition(const uint8_t* data) {
         switch (position) {
             case LEVER_UP:
             case LEVER_UP_TWO:
-                if (s_gws.gear == 0) {
+                if (s_gws.gear == GWS_NEUTRAL) {
                     s_gws.attempts = 0;
-                    s_gws.gear = -1;
+                    s_gws.gear = GWS_REVERSE;
                 }
                 if (signum(s_gws.gear) == 1) {
                     s_gws.attempts = 0;
-                    s_gws.gear = 0;
+                    s_gws.gear = GWS_NEUTRAL;
                 }
                 break;
             case LEVER_DOWN:
             case LEVER_DOWN_TWO:
-                if (s_gws.gear == 0) {
+                if (s_gws.gear == GWS_NEUTRAL) {
                     s_gws.attempts = 0;
-                    s_gws.gear = 1;
+                    s_gws.gear = GWS_DRIVE;
                 }
-                if (s_gws.gear == -1) {
+                if (s_gws.gear == GWS_REVERSE) {
                     s_gws.attempts = 0;
-                    s_gws.gear = 0;
+                    s_gws.gear = GWS_NEUTRAL;
                 }
                 break;
             case LEVER_SIDE_UP:
@@ -150,9 +150,9 @@ void handleGwsPosition(const uint8_t* data) {
         }
     }
 
-    if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != 0)) {
+    if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != GWS_NEUTRAL)) {
         s_gws.attempts = 0;
-        s_gws.gear = 0;
+        s_gws.gear = GWS_NEUTRAL;
     }
 
     currentPosition = position;
@@ -167,7 +167,7 @@ void sendJoystick() {
     if (s_gws.shifter_manual != gameShifterManual()) {
         if (s_gws.attempts == 3) {
             if (!CONFIGURATION_MODE) {
-                s_gws.gear = 2;
+                s_gws.gear = GWS_TRANSITIONAL;
                 s_gws.attempts = 0;
             }
         } else if (current - lastAttempt >= 1000) {
@@ -180,7 +180,7 @@ void sendJoystick() {
 
     if (signum(s_gws.gear) != gameGearSign()) {
         if (s_gws.attempts == 3) {
-            s_gws.gear = gameGearSign();
+            s_gws.gear = (GwsGear)gameGearSign();
             s_gws.attempts = 0;
         } else if (current - lastAttempt >= 1000) {
             // s_gws.gear (-1/0/1) maps to the reverse/neutral/drive button.

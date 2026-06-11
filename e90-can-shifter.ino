@@ -8,10 +8,6 @@
 SInput s_input;
 SGws s_gws;
 
-static int signum(int val) {
-    return (0 < val) - (val < 0);
-}
-
 // CRC8, polynomial 0x1D, init 0x00, final xor 0x70
 static uint8_t crc8(const uint8_t* data, uint8_t len) {
     uint8_t crc = 0x00;
@@ -24,13 +20,18 @@ static uint8_t crc8(const uint8_t* data, uint8_t len) {
     return crc ^ 0x70;
 }
 
-// Game gear from the latest telemetry, reduced to a sign: -1 R, 0 N, 1 D
-static int gameGearSign() {
+// The game's current gear reduced to R/N/D.
+static GwsGear gameGear() {
     switch (s_input.currentGear) {
-        case REVERSE: return -1;
-        case DRIVE:   return 1;
-        default:      return 0; // NEUTRAL, PARK
+        case REVERSE: return GWS_REVERSE;
+        case DRIVE:   return GWS_DRIVE;
+        default:      return GWS_NEUTRAL; // NEUTRAL, PARK
     }
+}
+
+// The lever's gear, with the transient TRANSITIONAL state counted as DRIVE.
+static GwsGear leverGear() {
+    return s_gws.gear == GWS_TRANSITIONAL ? GWS_DRIVE : s_gws.gear;
 }
 
 static bool gameShifterManual() {
@@ -67,7 +68,7 @@ void sendGear() {
     }
 
     // Flash the indicator until the game engages the requested gear
-    if (signum(s_gws.gear) != gameGearSign()) {
+    if (leverGear() != gameGear()) {
         frame[2] |= DISPLAY_FLASH;
     }
 
@@ -121,7 +122,7 @@ void handleGwsPosition(const uint8_t* data) {
                     s_gws.attempts = 0;
                     s_gws.gear = GWS_REVERSE;
                 }
-                if (signum(s_gws.gear) == 1) {
+                if (leverGear() == GWS_DRIVE) {
                     s_gws.attempts = 0;
                     s_gws.gear = GWS_NEUTRAL;
                 }
@@ -178,9 +179,9 @@ void sendJoystick() {
         }
     }
 
-    if (signum(s_gws.gear) != gameGearSign()) {
+    if (leverGear() != gameGear()) {
         if (s_gws.attempts == 3) {
-            s_gws.gear = (GwsGear)gameGearSign();
+            s_gws.gear = gameGear();
             s_gws.attempts = 0;
         } else if (current - lastAttempt >= 1000) {
             // s_gws.gear (-1/0/1) maps to the reverse/neutral/drive button.

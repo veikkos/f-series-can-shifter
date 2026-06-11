@@ -4,6 +4,8 @@
 
 Connects a real BMW F-series electronic gear selector (GWS) to a PC with an Arduino, so the physical lever shifts gears in driving games. The lever's gear indicator and backlight are driven back from the game's telemetry.
 
+Spinoff of https://github.com/veikkos/e90-can-cluster.
+
 ![BMW F-series gear lever](./media/shifter.jpg)
 
 ## How it works

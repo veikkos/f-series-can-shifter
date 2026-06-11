@@ -48,22 +48,21 @@ static GamepadButton gearButton(GwsGear gear) {
     }
 }
 
-// Move the gear along the P-R-N-D gate: positive steps toward drive, negative
-// toward reverse. Park is only reachable via the park button, so up-tips never
-// re-enter it.
+// Step the gear along the R-N-D gate: positive steps toward drive, negative
+// toward reverse. Park sits at the reverse end of the gate and is engaged only
+// via the park button, so the clamp keeps tips from ever landing back in park.
 static GwsGear stepGear(GwsGear gear, int steps) {
-    static const GwsGear ladder[] = { GWS_PARK, GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
-    if (gear == GWS_PARK && steps < 0) {
-        return GWS_PARK;
-    }
-    GwsGear current = (gear == GWS_TRANSITIONAL) ? GWS_DRIVE : gear;
-    int idx = 1;
-    for (int i = 0; i < 4; i++) {
+    static const GwsGear ladder[] = { GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
+    GwsGear current = (gear == GWS_PARK)         ? GWS_REVERSE
+                    : (gear == GWS_TRANSITIONAL) ? GWS_DRIVE
+                    : gear;
+    int idx = 0; // REVERSE
+    for (int i = 0; i < 3; i++) {
         if (ladder[i] == current) idx = i;
     }
     idx += steps;
-    if (idx < 1) idx = 1; // never tip into park
-    if (idx > 3) idx = 3;
+    if (idx < 0) idx = 0;
+    if (idx > 2) idx = 2;
     return ladder[idx];
 }
 
@@ -78,6 +77,17 @@ static int upDepth(uint8_t position) {
 static int downDepth(uint8_t position) {
     if (position == LEVER_DOWN)     return 1;
     if (position == LEVER_DOWN_TWO) return 2;
+    return 0;
+}
+
+// Notches to step when the lever moves between positions: the gear follows the
+// lever deeper into a gate (one per detent) and ignores the spring back toward
+// centre. Robust to the reader repeating or skipping detents.
+static int gateStep(uint8_t from, uint8_t to) {
+    int down = downDepth(to) - downDepth(from);
+    if (down > 0) return down;  // deeper toward drive
+    int up = upDepth(to) - upDepth(from);
+    if (up > 0) return -up;     // deeper toward reverse
     return 0;
 }
 
@@ -158,14 +168,14 @@ void handleGwsPosition(const uint8_t* data) {
     }
 
     // Tipping deeper into a gate steps the gear: one notch = one step, two = two
-    int downStep = downDepth(position) - downDepth(currentPosition);
-    int upStep   = upDepth(position)   - upDepth(currentPosition);
-    if (downStep > 0) {
-        s_gws.gear = stepGear(s_gws.gear, downStep);
-        s_gws.gear_attempts = 0;
-    } else if (upStep > 0) {
-        s_gws.gear = stepGear(s_gws.gear, -upStep);
-        s_gws.gear_attempts = 0;
+    int step = gateStep(currentPosition, position);
+
+    if (step != 0) {
+        GwsGear stepped = stepGear(s_gws.gear, step);
+        if (stepped != s_gws.gear) {
+            s_gws.gear = stepped;
+            s_gws.gear_attempts = 0;
+        }
     }
 
     // Sequential paddles in the manual gate

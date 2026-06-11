@@ -48,6 +48,39 @@ static GamepadButton gearButton(GwsGear gear) {
     }
 }
 
+// Move the gear along the P-R-N-D gate: positive steps toward drive, negative
+// toward reverse. Park is only reachable via the park button, so up-tips never
+// re-enter it.
+static GwsGear stepGear(GwsGear gear, int steps) {
+    static const GwsGear ladder[] = { GWS_PARK, GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
+    if (gear == GWS_PARK && steps < 0) {
+        return GWS_PARK;
+    }
+    GwsGear current = (gear == GWS_TRANSITIONAL) ? GWS_DRIVE : gear;
+    int idx = 1;
+    for (int i = 0; i < 4; i++) {
+        if (ladder[i] == current) idx = i;
+    }
+    idx += steps;
+    if (idx < 1) idx = 1; // never tip into park
+    if (idx > 3) idx = 3;
+    return ladder[idx];
+}
+
+// How far a lever position reaches into the up (toward reverse) gate, 0 if not
+static int upDepth(uint8_t position) {
+    if (position == LEVER_UP)     return 1;
+    if (position == LEVER_UP_TWO) return 2;
+    return 0;
+}
+
+// How far a lever position reaches into the down (toward drive) gate, 0 if not
+static int downDepth(uint8_t position) {
+    if (position == LEVER_DOWN)     return 1;
+    if (position == LEVER_DOWN_TWO) return 2;
+    return 0;
+}
+
 static bool gameShifterManual() {
     return s_input.explicitGear != NONE;
 }
@@ -124,42 +157,25 @@ void handleGwsPosition(const uint8_t* data) {
         s_gws.shifter_manual = true;
     }
 
-    if (position != currentPosition && position != LEVER_CENTRE_MIDDLE && position != LEVER_CENTRE_SIDE) {
-        switch (position) {
-            case LEVER_UP:
-            case LEVER_UP_TWO:
-                // Leaving park behaves like leaving neutral
-                if (s_gws.gear == GWS_NEUTRAL || s_gws.gear == GWS_PARK) {
-                    s_gws.gear_attempts = 0;
-                    s_gws.gear = GWS_REVERSE;
-                }
-                if (leverGear() == GWS_DRIVE) {
-                    s_gws.gear_attempts = 0;
-                    s_gws.gear = GWS_NEUTRAL;
-                }
-                break;
-            case LEVER_DOWN:
-            case LEVER_DOWN_TWO:
-                if (s_gws.gear == GWS_NEUTRAL || s_gws.gear == GWS_PARK) {
-                    s_gws.gear_attempts = 0;
-                    s_gws.gear = GWS_DRIVE;
-                }
-                if (s_gws.gear == GWS_REVERSE) {
-                    s_gws.gear_attempts = 0;
-                    s_gws.gear = GWS_NEUTRAL;
-                }
-                break;
-            case LEVER_SIDE_UP:
-                gamepadPress(BTN_PADDLE_UP);
-                gamepadRelease(BTN_PADDLE_UP);
-                break;
-            case LEVER_SIDE_DOWN:
-                gamepadPress(BTN_PADDLE_DOWN);
-                gamepadRelease(BTN_PADDLE_DOWN);
-                break;
-            default:
-                break;
-        }
+    // Tipping deeper into a gate steps the gear: one notch = one step, two = two
+    int downStep = downDepth(position) - downDepth(currentPosition);
+    int upStep   = upDepth(position)   - upDepth(currentPosition);
+    if (downStep > 0) {
+        s_gws.gear = stepGear(s_gws.gear, downStep);
+        s_gws.gear_attempts = 0;
+    } else if (upStep > 0) {
+        s_gws.gear = stepGear(s_gws.gear, -upStep);
+        s_gws.gear_attempts = 0;
+    }
+
+    // Sequential paddles in the manual gate
+    if (position == LEVER_SIDE_UP && currentPosition != LEVER_SIDE_UP) {
+        gamepadPress(BTN_PADDLE_UP);
+        gamepadRelease(BTN_PADDLE_UP);
+    }
+    if (position == LEVER_SIDE_DOWN && currentPosition != LEVER_SIDE_DOWN) {
+        gamepadPress(BTN_PADDLE_DOWN);
+        gamepadRelease(BTN_PADDLE_DOWN);
     }
 
     if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != GWS_PARK)) {

@@ -63,7 +63,7 @@ void sendGear() {
 
     // Flash the indicator until the game engages the requested gear, with no
     // game talking there is nothing to wait for
-    if (serialGameFresh(millis()) && shifterTargetGear() != gameGear()) {
+    if (shifterConnected() && shifterTargetGear() != gameGear()) {
         frame[2] |= DISPLAY_FLASH;
     }
 
@@ -91,7 +91,7 @@ void sendCanBus() {
 void handleGwsPosition(const uint8_t* data) {
     LeverEvents events;
     if (gwsLeverDecode(data, &events)) {
-        shifterApplyLever(events);
+        shifterApplyLever(events, millis());
     }
 }
 

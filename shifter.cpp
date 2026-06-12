@@ -1,80 +1,50 @@
 #include "shifter.h"
 #include "gamepad.h"
 
-// Gamepad sync attempts before adopting the game's state
-static const uint8_t SYNC_ATTEMPT_LIMIT = 3;
+// How long the game gets to engage a lever request before the game's own
+// state is adopted back
+static const uint32_t SYNC_GIVE_UP_MS = 3000;
 
-// Pause between gamepad sync attempts
-static const uint32_t SYNC_RETRY_MS = 1000;
-
-// A sync machine drives one lever-selected setting, gear or mode, into the
-// game by pressing a gamepad button until the game agrees or the attempts
-// run out
-enum SyncState : uint8_t {
-    SYNC_IDLE,       // lever and game agree
-    SYNC_REQUESTING, // pressing the gamepad button, counting attempts
+// A lever request: the selection is already held on the gamepad buttons, so
+// there is nothing to retry — the game just gets a grace period to engage it
+// before a mismatch means the game won. A mismatch with no request pending
+// means the game changed the state on its own (car reset, in-game paddles)
+// and is adopted at once
+struct SyncRequest {
+    bool pending = false; // a lever-initiated change is waiting for the game
+    uint32_t openedMs = 0;
 };
 
-enum SyncAction : uint8_t {
-    SYNC_NONE,  // nothing to do this tick
-    SYNC_PRESS, // press the gamepad button
-    SYNC_ADOPT, // give up and take the game's state
-};
-
-struct SyncMachine {
-    SyncState state = SYNC_IDLE;
-    uint8_t attempts = 0;
-    uint32_t lastAttemptMs = 0;
-};
-
-// A new lever target gets fresh attempts
-static void syncNewTarget(SyncMachine& m) {
-    m.attempts = 0;
+static void openRequest(SyncRequest& r, uint32_t now) {
+    r.pending = true;
+    r.openedMs = now;
 }
 
-// Advance a sync machine one tick and return what the caller should do
-static SyncAction syncTick(SyncMachine& m, bool matches, uint32_t now) {
-    switch (m.state) {
-        case SYNC_IDLE:
-            if (!matches) {
-                m.state = SYNC_REQUESTING;
-            }
-            return SYNC_NONE;
-
-        case SYNC_REQUESTING:
-            if (matches) {
-                m.state = SYNC_IDLE;
-                return SYNC_NONE;
-            }
-            if (m.attempts >= SYNC_ATTEMPT_LIMIT) {
-                return SYNC_ADOPT;
-            }
-            if (now - m.lastAttemptMs >= SYNC_RETRY_MS) {
-                m.attempts++;
-                m.lastAttemptMs = now;
-                return SYNC_PRESS;
-            }
-            return SYNC_NONE;
+// Whether a mismatching game state should be adopted this tick. A match
+// closes the pending request; on adoption the caller closes it
+static bool adoptTick(SyncRequest& r, bool matches, uint32_t now) {
+    if (matches) {
+        r.pending = false;
+        return false;
     }
-    return SYNC_NONE;
+    return !r.pending || now - r.openedMs >= SYNC_GIVE_UP_MS;
 }
 
-// Lever-side state the machines drive the game toward
+// Lever-side state the game is given to engage
 static struct {
     GwsGear gear = GWS_NEUTRAL;
     bool manual = false;
-    SyncMachine gearSync;
-    SyncMachine modeSync;
+    bool connected = false; // game telemetry was fresh on the last tick
+    SyncRequest gearRequest;
+    SyncRequest modeRequest;
 } s;
 
 // Step the gear along the R-N-D gate: positive steps toward drive, negative
 // toward reverse. Park sits at the reverse end of the gate and is engaged only
-// via the park button, so the clamp keeps tips from ever landing back in park.
+// via the park button, so the clamp keeps tips from ever landing back in park
 static GwsGear stepGear(GwsGear gear, int steps) {
     static const GwsGear ladder[] = { GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
-    GwsGear current = (gear == GWS_PARK)         ? GWS_REVERSE
-                    : (gear == GWS_TRANSITIONAL) ? GWS_DRIVE
-                    : gear;
+    GwsGear current = (gear == GWS_PARK) ? GWS_REVERSE : gear;
     int idx = 0; // REVERSE
     for (int i = 0; i < 3; i++) {
         if (ladder[i] == current) idx = i;
@@ -90,36 +60,62 @@ static void tapButton(GamepadButton button) {
     gamepadRelease(button);
 }
 
-// Hold the selected gear's button, no button held means neutral
-static void pressGearButton(GwsGear gear) {
-    gamepadRelease(BTN_GEAR_REVERSE);
-    gamepadRelease(BTN_GEAR_DRIVE);
-    gamepadRelease(BTN_GEAR_PARK);
-
+// Gamepad button that holds the given gear engaged, false for neutral which
+// holds none
+static bool gearButton(GwsGear gear, GamepadButton* button) {
     switch (gear) {
-        case GWS_PARK:    gamepadPress(BTN_GEAR_PARK);    break;
-        case GWS_REVERSE: gamepadPress(BTN_GEAR_REVERSE); break;
-        case GWS_DRIVE:   gamepadPress(BTN_GEAR_DRIVE);   break;
-        default:          break; // neutral: nothing held
+        case GWS_PARK:    *button = BTN_GEAR_PARK;    return true;
+        case GWS_REVERSE: *button = BTN_GEAR_REVERSE; return true;
+        case GWS_DRIVE:   *button = BTN_GEAR_DRIVE;   return true;
+        default:          return false; // neutral
     }
 }
 
-void shifterApplyLever(const LeverEvents& events) {
-    if (events.leftManualGate) {
-        s.manual = false;
-        syncNewTarget(s.modeSync);
+// Hold the mode button while manual/sport is selected, released means automatic
+static void pressModeButton(bool manual) {
+    static bool held = false;
+    if (manual == held) {
+        return;
     }
-    if (events.enteredManualGate) {
-        s.manual = true;
-        syncNewTarget(s.modeSync);
+    if (manual) {
+        gamepadPress(BTN_MODE_MANUAL);
+    } else {
+        gamepadRelease(BTN_MODE_MANUAL);
+    }
+    held = manual;
+}
+
+static void pressGearButton(GwsGear gear) {
+    static GwsGear held = GWS_NEUTRAL;
+    if (gear == held) {
+        return;
+    }
+    GamepadButton button;
+    if (gearButton(held, &button)) {
+        gamepadRelease(button);
+    }
+    if (gearButton(gear, &button)) {
+        gamepadPress(button);
+    }
+    held = gear;
+}
+
+void shifterApplyLever(const LeverEvents& events, uint32_t now) {
+    // The lever always drives the buttons directly, connected or not; the
+    // requests only decide when the shifter snaps back to the game's state
+    if (events.enteredManualGate || events.leftManualGate) {
+        s.manual = events.enteredManualGate;
+        pressModeButton(s.manual);
+        openRequest(s.modeRequest, now);
     }
 
     // Tipping deeper into a gate steps the gear: one notch = one step, two = two
     if (events.stepsTowardDrive != 0) {
-        GwsGear stepped = stepGear(s.gear, events.stepsTowardDrive);
+        GwsGear stepped = stepGear(shifterTargetGear(), events.stepsTowardDrive);
         if (stepped != s.gear) {
             s.gear = stepped;
-            syncNewTarget(s.gearSync);
+            pressGearButton(stepped);
+            openRequest(s.gearRequest, now);
         }
     }
 
@@ -133,40 +129,46 @@ void shifterApplyLever(const LeverEvents& events) {
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
         s.gear = GWS_PARK;
-        syncNewTarget(s.gearSync);
+        pressGearButton(GWS_PARK);
+        openRequest(s.gearRequest, now);
     }
 }
 
 void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh) {
-    // A stale game state is never adopted, pressing just stops at the
-    // attempt limit
-    switch (syncTick(s.modeSync, s.manual == gameManual, now)) {
-        case SYNC_PRESS:
-            tapButton(BTN_MODE_TOGGLE);
-            break;
-        case SYNC_ADOPT:
-            if (gameFresh) {
-                s.gear = GWS_TRANSITIONAL;
-                syncNewTarget(s.modeSync);
-            }
-            break;
-        case SYNC_NONE:
-            break;
+    // With no game talking there is nothing to adopt; the lever is a plain
+    // button box
+    if (!gameFresh) {
+        s.connected = false;
+        return;
     }
 
-    switch (syncTick(s.gearSync, shifterTargetGear() == gameGear, now)) {
-        case SYNC_PRESS:
-            pressGearButton(shifterTargetGear());
-            break;
-        case SYNC_ADOPT:
-            if (gameFresh) {
-                s.gear = gameGear;
-                syncNewTarget(s.gearSync);
-            }
-            break;
-        case SYNC_NONE:
-            break;
+    // On reconnect a request made while disconnected gets a fresh grace
+    // period against the live game
+    if (!s.connected) {
+        s.connected = true;
+        s.gearRequest.openedMs = now;
+        s.modeRequest.openedMs = now;
     }
+
+    if (adoptTick(s.modeRequest, s.manual == gameManual, now)) {
+        if (s.modeRequest.pending) {
+            // The lever's mode request went unanswered, the gear is uncertain
+            s.gear = GWS_TRANSITIONAL;
+        }
+        s.manual = gameManual;
+        pressModeButton(gameManual);
+        s.modeRequest.pending = false;
+    }
+
+    if (adoptTick(s.gearRequest, shifterTargetGear() == gameGear, now)) {
+        s.gear = gameGear;
+        pressGearButton(gameGear);
+        s.gearRequest.pending = false;
+    }
+}
+
+bool shifterConnected() {
+    return s.connected;
 }
 
 GwsGear shifterGear() {

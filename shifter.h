@@ -7,13 +7,19 @@
 // Lever-side gear state machine that drives the game to match the lever via
 // gamepad buttons
 
-// Apply decoded lever events
-void shifterApplyLever(const LeverEvents& events);
+// Apply decoded lever events: lever moves drive the gamepad buttons directly
+// and open a request the game gets a grace period to engage
+void shifterApplyLever(const LeverEvents& events, uint32_t now);
 
-// Retry gamepad presses until the game matches the lever, or adopt the
-// game's state after too many attempts. A stale game (gameFresh false) is
-// never adopted
+// Adopt the game's state when a lever request goes unanswered past the grace
+// period, or immediately when the game changed the state on its own (car
+// reset, in-game paddles). While the game is stale (gameFresh false) nothing
+// is adopted and the lever acts as a plain button box; reconnecting gives a
+// pending lever request a fresh grace period
 void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh);
+
+// Whether game telemetry was fresh on the last tick
+bool shifterConnected();
 
 // The lever's gear for the gear indicator display
 GwsGear shifterGear();

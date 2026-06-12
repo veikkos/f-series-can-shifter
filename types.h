@@ -56,8 +56,8 @@ enum GwsDisplay : uint8_t {
     DISPLAY_PARK     = 0x20,
     DISPLAY_REVERSE  = 0x40,
     DISPLAY_NEUTRAL  = 0x60,
-    DISPLAY_DRIVE    = 0x80,
-    DISPLAY_DRIVE_MS = 0x81, // D, lever can move to M/S
+    DISPLAY_DRIVE    = 0x80, // D
+    DISPLAY_DRIVE_MS = 0x81, // D, can move to M/S; GWS shows M/S when the lever is at the side
     DISPLAY_FLASH    = 0x08, // OR with the gear to flash it
 };
 

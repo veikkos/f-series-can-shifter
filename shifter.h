@@ -21,6 +21,10 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
 // Whether game telemetry was fresh on the last tick
 bool shifterConnected();
 
+// Whether the lever's physical gate disagrees with the game's mode, only
+// resolvable by moving the lever between the side and centre gates
+bool shifterModeMismatch();
+
 // The lever's gear for the gear indicator display
 GwsGear shifterGear();
 

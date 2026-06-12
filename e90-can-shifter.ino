@@ -61,9 +61,11 @@ void sendGear() {
         frame[2] = DISPLAY_DRIVE;
     }
 
-    // Flash the indicator until the game engages the requested gear, with no
-    // game talking there is nothing to wait for
-    if (shifterConnected() && shifterTargetGear() != gameGear()) {
+    // Flash the indicator until the game engages the requested gear, or while
+    // the physical gate disagrees with the game's mode; with no game talking
+    // there is nothing to wait for
+    if (shifterConnected() &&
+        (shifterTargetGear() != gameGear() || shifterModeMismatch())) {
         frame[2] |= DISPLAY_FLASH;
     }
 

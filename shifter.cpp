@@ -30,6 +30,8 @@ static struct {
     GwsGear gear = GWS_NEUTRAL;
     bool manual = false;
     bool connected = false; // game telemetry was fresh on the last tick
+    bool physicalManual = false; // lever is physically in the M/S side gate
+    bool modeMismatch = false;   // physical gate disagrees with the game's mode
     SyncRequest gearRequest;
     SyncRequest modeRequest;
 } s;
@@ -95,6 +97,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     // requests only decide when the shifter snaps back to the game's state
     if (events.enteredManualGate || events.leftManualGate) {
         s.manual = events.enteredManualGate;
+        s.physicalManual = events.enteredManualGate;
         holdButton(BTN_MODE_MANUAL, s.manual);
         openRequest(s.modeRequest, now);
     }
@@ -126,6 +129,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
     // button box
     if (!gameFresh) {
         s.connected = false;
+        s.modeMismatch = false;
         return;
     }
 
@@ -152,10 +156,19 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
         pressGearButton(gameGear);
         s.gearRequest.pending = false;
     }
+
+    // The physical gate and the game's mode can only be realigned by moving the
+    // lever between the side and centre gates, so flag the disagreement for the
+    // indicator to blink until the lever is cycled
+    s.modeMismatch = s.physicalManual != gameManual;
 }
 
 bool shifterConnected() {
     return s.connected;
+}
+
+bool shifterModeMismatch() {
+    return s.modeMismatch;
 }
 
 GwsGear shifterGear() {

@@ -10,8 +10,8 @@ Spinoff of https://github.com/veikkos/e90-can-cluster.
 
 ## How it works
 
-- Lever movements are translated into USB-HID gamepad button presses, which the game maps to shift up / down / reverse / mode switch
-- The game's current gear is sent back to the board over serial
+- Lever movements are translated into USB-HID gamepad button presses
+- The game's current gear is sent back to the lever over serial for synchronization purposes
 
 ## Hardware
 
@@ -38,20 +38,23 @@ Shifter uses same binary protocol and proxy as the [cluster project](https://git
 
 ### Configuration mode
 
-When no telemetry has arrived from the game for 5 seconds (game closed, or sitting in its bindings menu), the lever automatically acts as a plain button box: lever moves still press the gamepad buttons, but the lever state is never forced to match the stale game state. Use this to bind the lever's gamepad buttons in the game:
+When no telemetry has arrived from the game for 5 seconds (proxy is not on), the lever automatically acts as a plain button box: lever moves still press the gamepad buttons, but the lever state is never forced to match the stale game state. Use this to bind the lever's gamepad buttons in the game.
 
-- Automatic gearbox Drive: push the selector down from N
-- Automatic gearbox Reverse: push the selector up from N
-- Park: press the selector's park button
-- Gearbox Automatic/Sequential switch: push sideways from D
-- Shift up: push the selector down
-- Shift down: push the selector up
+### BeamNG.drive
 
-Gear buttons are held while the gear is engaged; no gear button held means neutral, so neutral needs no binding of its own. The Automatic/Sequential switch is likewise held while the lever sits in the manual gate, released for automatic, and the shift up/down buttons are held for as long as the lever is held in its detent.
+Bind the lever's gamepad buttons in BeamNG's controller settings as follows:
 
-Normal synced operation resumes by itself as soon as telemetry flows again.
+| Shifter         | BeamNG    |
+| --------------- | --------- |
+| Park            | 1st gear  |
+| Drive           | 2nd gear  |
+| Sport           | 3rd gear  |
+| Manual          | 6th gear  |
+| Reverse         | Reverse   |
+| Push in M/S     | Gear down |
+| Pull in M/S     | Gear up   |
 
 ## Credits
 
-- [TeksuSiK/bmw-gws-simhub](https://github.com/TeksuSiK/bmw-gws-simhub) for the original gear-lever logic.
-- [OpenInverter.org — BMW F-Series Gear Lever](https://openinverter.org/wiki/BMW_F-Series_Gear_Lever) for the CAN messages.
+- [TeksuSiK/bmw-gws-simhub](https://github.com/TeksuSiK/bmw-gws-simhub) for the original gear-lever logic
+- [OpenInverter.org — BMW F-Series Gear Lever](https://openinverter.org/wiki/BMW_F-Series_Gear_Lever) for the CAN messages

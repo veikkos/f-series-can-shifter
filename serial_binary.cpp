@@ -12,6 +12,13 @@ static char rx_buf[FRAME_LENGTH];
 static size_t rx_pos = 0;
 static bool line_ready = false;
 
+static uint32_t last_frame_ms = 0;
+static bool frame_received = false;
+
+bool serialGameFresh(uint32_t now) {
+    return frame_received && (now - last_frame_ms < GAME_DATA_TIMEOUT_MS);
+}
+
 void serialBegin() {
     pc.begin(PC_SERIAL_BAUD);
 }
@@ -69,6 +76,9 @@ static void serialParse() {
         serial_printf(pc, "[UART] Checksum mismatch: received %02X, calculated %02X\n", checksumReceived, checksumCalculated);
         return;
     }
+
+    last_frame_ms = millis();
+    frame_received = true;
 
     int idx = 1; // skip 'S'
 

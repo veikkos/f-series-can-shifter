@@ -66,14 +66,14 @@ static const uint8_t GWS_COUNTER_INVALID = 0x0F;
 static const uint8_t BACKLIGHT_FULL = 0xFF;
 static const uint8_t BACKLIGHT_OFF  = 0x00;
 
+// Neutral has no button, no gear button held means neutral
 enum GamepadButton : uint8_t {
     BTN_GEAR_REVERSE = 0,
-    BTN_GEAR_NEUTRAL = 1,
-    BTN_GEAR_DRIVE   = 2,
-    BTN_MODE_TOGGLE  = 3,
-    BTN_PADDLE_UP    = 4,
-    BTN_PADDLE_DOWN  = 5,
-    BTN_GEAR_PARK    = 6,
+    BTN_GEAR_DRIVE   = 1,
+    BTN_MODE_TOGGLE  = 2,
+    BTN_PADDLE_UP    = 3,
+    BTN_PADDLE_DOWN  = 4,
+    BTN_GEAR_PARK    = 5,
 };
 
 // Gear the lever has selected.
@@ -83,14 +83,6 @@ enum GwsGear : int8_t {
     GWS_DRIVE        = 1,
     GWS_TRANSITIONAL = 2, // momentary state while toggling auto/manual
     GWS_PARK         = 3,
-};
-
-// Physical gear-lever (GWS) state
-struct SGws {
-    GwsGear gear = GWS_NEUTRAL;
-    bool shifter_manual = false;
-    uint8_t mode_attempts = 0; // gamepad sync attempts before forcing the mode
-    uint8_t gear_attempts = 0; // gamepad sync attempts before forcing the gear
 };
 
 struct SInput {

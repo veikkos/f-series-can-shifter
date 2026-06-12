@@ -38,17 +38,18 @@ Shifter uses same binary protocol and proxy as the [cluster project](https://git
 
 ### Configuration mode
 
-Set `CONFIGURATION_MODE` to `true` in [config.h](config.h) and flash, then bind the lever's gamepad buttons in the game:
+When no telemetry has arrived from the game for 5 seconds (game closed, or sitting in its bindings menu), the lever automatically acts as a plain button box: lever moves still press the gamepad buttons, but the lever state is never forced to match the stale game state. Use this to bind the lever's gamepad buttons in the game:
 
 - Automatic gearbox Drive: push the selector down from N
 - Automatic gearbox Reverse: push the selector up from N
 - Park: press the selector's park button
-- Shift to neutral: shift up from D
 - Gearbox Automatic/Sequential switch: push sideways from D
 - Shift up: push the selector down
 - Shift down: push the selector up
 
-Set `CONFIGURATION_MODE` back to `false` and re-flash.
+Gear buttons are held while the gear is engaged; no gear button held means neutral, so neutral needs no binding of its own.
+
+Normal synced operation resumes by itself as soon as telemetry flows again.
 
 ## Credits
 

@@ -4,12 +4,10 @@
 #include "serial.h"
 #include "can_adapter.h"
 #include "gamepad.h"
+#include "gws_lever.h"
+#include "shifter.h"
 
 SInput s_input;
-SGws s_gws;
-
-// Gamepad sync attempts before forcing the lever state to match the game
-static const uint8_t SYNC_ATTEMPT_LIMIT = 3;
 
 // CRC8, polynomial 0x1D, init 0x00, final xor 0x70
 static uint8_t crc8(const uint8_t* data, uint8_t len) {
@@ -33,64 +31,6 @@ static GwsGear gameGear() {
     }
 }
 
-// The lever's gear, with the transient TRANSITIONAL state counted as DRIVE
-static GwsGear leverGear() {
-    return s_gws.gear == GWS_TRANSITIONAL ? GWS_DRIVE : s_gws.gear;
-}
-
-// Gamepad button that engages the given gear in the game
-static GamepadButton gearButton(GwsGear gear) {
-    switch (gear) {
-        case GWS_PARK:    return BTN_GEAR_PARK;
-        case GWS_REVERSE: return BTN_GEAR_REVERSE;
-        case GWS_DRIVE:   return BTN_GEAR_DRIVE;
-        default:          return BTN_GEAR_NEUTRAL;
-    }
-}
-
-// Step the gear along the R-N-D gate: positive steps toward drive, negative
-// toward reverse. Park sits at the reverse end of the gate and is engaged only
-// via the park button, so the clamp keeps tips from ever landing back in park.
-static GwsGear stepGear(GwsGear gear, int steps) {
-    static const GwsGear ladder[] = { GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
-    GwsGear current = (gear == GWS_PARK)         ? GWS_REVERSE
-                    : (gear == GWS_TRANSITIONAL) ? GWS_DRIVE
-                    : gear;
-    int idx = 0; // REVERSE
-    for (int i = 0; i < 3; i++) {
-        if (ladder[i] == current) idx = i;
-    }
-    idx += steps;
-    if (idx < 0) idx = 0;
-    if (idx > 2) idx = 2;
-    return ladder[idx];
-}
-
-// How far a lever position reaches into the up (toward reverse) gate, 0 if not
-static int upDepth(uint8_t position) {
-    if (position == LEVER_UP)     return 1;
-    if (position == LEVER_UP_TWO) return 2;
-    return 0;
-}
-
-// How far a lever position reaches into the down (toward drive) gate, 0 if not
-static int downDepth(uint8_t position) {
-    if (position == LEVER_DOWN)     return 1;
-    if (position == LEVER_DOWN_TWO) return 2;
-    return 0;
-}
-
-// Notches to step when the lever moves between positions: the gear follows the
-// lever deeper into a gate (one per detent) and ignores the spring back toward
-// centre. Robust to the reader repeating or skipping detents.
-static int gateStep(uint8_t from, uint8_t to) {
-    int down = downDepth(to) - downDepth(from);
-    if (down > 0) return down;  // deeper toward drive
-    int up = upDepth(to) - upDepth(from);
-    if (up > 0) return -up;     // deeper toward reverse
-    return 0;
-}
-
 static bool gameShifterManual() {
     return s_input.explicitGear != NONE;
 }
@@ -108,20 +48,22 @@ void sendGear() {
 
     frame[1] = counter;
 
-    if (s_gws.gear == GWS_PARK) {
+    GwsGear gear = shifterGear();
+    if (gear == GWS_PARK) {
         frame[2] = DISPLAY_PARK;
-    } else if (s_gws.gear == GWS_REVERSE) {
+    } else if (gear == GWS_REVERSE) {
         frame[2] = DISPLAY_REVERSE;
-    } else if (s_gws.gear == GWS_NEUTRAL) {
+    } else if (gear == GWS_NEUTRAL) {
         frame[2] = DISPLAY_NEUTRAL;
-    } else if (s_gws.gear == GWS_DRIVE) {
+    } else if (gear == GWS_DRIVE) {
         frame[2] = DISPLAY_DRIVE_MS;
-    } else if (s_gws.gear == GWS_TRANSITIONAL) {
+    } else if (gear == GWS_TRANSITIONAL) {
         frame[2] = DISPLAY_DRIVE;
     }
 
-    // Flash the indicator until the game engages the requested gear
-    if (leverGear() != gameGear()) {
+    // Flash the indicator until the game engages the requested gear, with no
+    // game talking there is nothing to wait for
+    if (serialGameFresh(millis()) && shifterTargetGear() != gameGear()) {
         frame[2] |= DISPLAY_FLASH;
     }
 
@@ -147,96 +89,9 @@ void sendCanBus() {
 }
 
 void handleGwsPosition(const uint8_t* data) {
-    static uint8_t currentPosition = LEVER_CENTRE_SIDE;
-    static int currentCounter = -1;
-
-    uint8_t readerCounter = data[1];
-    if (readerCounter == currentCounter) {
-        return;
-    }
-
-    uint8_t position = data[2];
-
-    if (currentPosition == LEVER_CENTRE_SIDE && position == LEVER_CENTRE_MIDDLE) {
-        s_gws.mode_attempts = 0;
-        s_gws.shifter_manual = false;
-    }
-
-    if (currentPosition == LEVER_CENTRE_MIDDLE && position == LEVER_CENTRE_SIDE) {
-        s_gws.mode_attempts = 0;
-        s_gws.shifter_manual = true;
-    }
-
-    // Tipping deeper into a gate steps the gear: one notch = one step, two = two
-    int step = gateStep(currentPosition, position);
-
-    if (step != 0) {
-        GwsGear stepped = stepGear(s_gws.gear, step);
-        if (stepped != s_gws.gear) {
-            s_gws.gear = stepped;
-            s_gws.gear_attempts = 0;
-        }
-    }
-
-    // Sequential paddles in the manual gate
-    if (position == LEVER_SIDE_UP && currentPosition != LEVER_SIDE_UP) {
-        gamepadPress(BTN_PADDLE_UP);
-        gamepadRelease(BTN_PADDLE_UP);
-    }
-    if (position == LEVER_SIDE_DOWN && currentPosition != LEVER_SIDE_DOWN) {
-        gamepadPress(BTN_PADDLE_DOWN);
-        gamepadRelease(BTN_PADDLE_DOWN);
-    }
-
-    if ((data[3] == GWS_PARK_BUTTON_PRESSED) && (s_gws.gear != GWS_PARK)) {
-        s_gws.gear_attempts = 0;
-        s_gws.gear = GWS_PARK;
-    }
-
-    currentPosition = position;
-    currentCounter = readerCounter;
-}
-
-// Drive the game towards the lever's selected gear / mode via gamepad buttons
-void sendJoystick() {
-    static uint32_t lastModeAttempt = 0;
-    static uint32_t lastGearAttempt = 0;
-    uint32_t current = millis();
-
-    if (s_gws.shifter_manual != gameShifterManual()) {
-        if (s_gws.mode_attempts == SYNC_ATTEMPT_LIMIT) {
-            if (!CONFIGURATION_MODE) {
-                s_gws.gear = GWS_TRANSITIONAL;
-                s_gws.mode_attempts = 0;
-            }
-        } else if (current - lastModeAttempt >= 1000) {
-            gamepadPress(BTN_MODE_TOGGLE);
-            gamepadRelease(BTN_MODE_TOGGLE);
-            s_gws.mode_attempts++;
-            lastModeAttempt = current;
-        }
-    }
-
-    if (leverGear() != gameGear()) {
-        if (s_gws.gear_attempts == SYNC_ATTEMPT_LIMIT) {
-            s_gws.gear = gameGear();
-            s_gws.gear_attempts = 0;
-        } else if (current - lastGearAttempt >= 1000) {
-            GamepadButton button = gearButton(leverGear());
-
-            gamepadRelease(BTN_GEAR_REVERSE);
-            gamepadRelease(BTN_GEAR_NEUTRAL);
-            gamepadRelease(BTN_GEAR_DRIVE);
-            gamepadRelease(BTN_GEAR_PARK);
-
-            gamepadPress(button);
-            if (leverGear() == GWS_NEUTRAL) {
-                gamepadRelease(button); // neutral is a momentary tap
-            }
-
-            s_gws.gear_attempts++;
-            lastGearAttempt = current;
-        }
+    LeverEvents events;
+    if (gwsLeverDecode(data, &events)) {
+        shifterApplyLever(events);
     }
 }
 
@@ -253,7 +108,8 @@ void setup() {
 
 void loop() {
     sendCanBus();
-    sendJoystick();
+    uint32_t now = millis();
+    shifterTick(now, gameGear(), gameShifterManual(), serialGameFresh(now));
     serialPoll();
     canPoll(handler_table, handler_count);
 }

@@ -41,10 +41,11 @@
     #error "Unsupported board: the gamepad requires an ATmega32u4 (Micro/Leonardo) or Teensy 4.x"
 #endif
 
-// Configuration mode: when true, the gear logic stays out of the way so the
-// lever's gamepad buttons can be bound in the game. See README.
-#ifndef CONFIGURATION_MODE
-    #define CONFIGURATION_MODE false
+// The game counts as disconnected when no valid telemetry frame has arrived
+// within this time. While disconnected the lever acts as a plain button box
+// so its buttons can be bound in the game. See README
+#ifndef GAME_DATA_TIMEOUT_MS
+    #define GAME_DATA_TIMEOUT_MS 5000
 #endif
 
 // Serial (custom binary protocol) baud rate to the PC.

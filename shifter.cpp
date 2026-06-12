@@ -5,11 +5,6 @@
 // state is adopted back
 static const uint32_t SYNC_GIVE_UP_MS = 3000;
 
-// A lever request: the selection is already held on the gamepad buttons, so
-// there is nothing to retry — the game just gets a grace period to engage it
-// before a mismatch means the game won. A mismatch with no request pending
-// means the game changed the state on its own (car reset, in-game paddles)
-// and is adopted at once
 struct SyncRequest {
     bool pending = false; // a lever-initiated change is waiting for the game
     uint32_t openedMs = 0;
@@ -55,9 +50,20 @@ static GwsGear stepGear(GwsGear gear, int steps) {
     return ladder[idx];
 }
 
-static void tapButton(GamepadButton button) {
-    gamepadPress(button);
-    gamepadRelease(button);
+// Press or release a button to track a held state, touching it only on change
+static void holdButton(GamepadButton button, bool hold) {
+    static uint8_t held = 0; // bitmask of buttons currently held
+    uint8_t bit = 1 << button;
+    if (hold == ((held & bit) != 0)) {
+        return;
+    }
+    if (hold) {
+        gamepadPress(button);
+        held |= bit;
+    } else {
+        gamepadRelease(button);
+        held &= ~bit;
+    }
 }
 
 // Gamepad button that holds the given gear engaged, false for neutral which
@@ -71,33 +77,17 @@ static bool gearButton(GwsGear gear, GamepadButton* button) {
     }
 }
 
-// Hold the mode button while manual/sport is selected, released means automatic
-static void pressModeButton(bool manual) {
-    static bool held = false;
-    if (manual == held) {
-        return;
-    }
-    if (manual) {
-        gamepadPress(BTN_MODE_MANUAL);
-    } else {
-        gamepadRelease(BTN_MODE_MANUAL);
-    }
-    held = manual;
-}
-
+// Hold the selected gear's button, no button held means neutral. Releases
+// come first so two gears are never held at once
 static void pressGearButton(GwsGear gear) {
-    static GwsGear held = GWS_NEUTRAL;
-    if (gear == held) {
-        return;
-    }
+    if (gear != GWS_REVERSE) holdButton(BTN_GEAR_REVERSE, false);
+    if (gear != GWS_DRIVE)   holdButton(BTN_GEAR_DRIVE, false);
+    if (gear != GWS_PARK)    holdButton(BTN_GEAR_PARK, false);
+
     GamepadButton button;
-    if (gearButton(held, &button)) {
-        gamepadRelease(button);
-    }
     if (gearButton(gear, &button)) {
-        gamepadPress(button);
+        holdButton(button, true);
     }
-    held = gear;
 }
 
 void shifterApplyLever(const LeverEvents& events, uint32_t now) {
@@ -105,7 +95,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     // requests only decide when the shifter snaps back to the game's state
     if (events.enteredManualGate || events.leftManualGate) {
         s.manual = events.enteredManualGate;
-        pressModeButton(s.manual);
+        holdButton(BTN_MODE_MANUAL, s.manual);
         openRequest(s.modeRequest, now);
     }
 
@@ -119,13 +109,10 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
         }
     }
 
-    // Sequential paddles in the manual gate
-    if (events.paddleUp) {
-        tapButton(BTN_PADDLE_UP);
-    }
-    if (events.paddleDown) {
-        tapButton(BTN_PADDLE_DOWN);
-    }
+    // Sequential paddles follow the lever in the manual gate: held while the
+    // lever is held in a detent, released when it springs back to centre
+    holdButton(BTN_PADDLE_UP, events.paddleUpHeld);
+    holdButton(BTN_PADDLE_DOWN, events.paddleDownHeld);
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
         s.gear = GWS_PARK;
@@ -156,7 +143,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
             s.gear = GWS_TRANSITIONAL;
         }
         s.manual = gameManual;
-        pressModeButton(gameManual);
+        holdButton(BTN_MODE_MANUAL, gameManual);
         s.modeRequest.pending = false;
     }
 

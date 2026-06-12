@@ -7,8 +7,8 @@ struct LeverEvents {
     int stepsTowardDrive = 0; // one per detent, negative toward reverse
     bool enteredManualGate = false;
     bool leftManualGate = false;
-    bool paddleUp = false;
-    bool paddleDown = false;
+    bool paddleUpHeld = false;   // lever currently held in the manual-gate up detent
+    bool paddleDownHeld = false; // ... or the down detent
     bool parkButtonPressed = false;
 };
 

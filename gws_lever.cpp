@@ -44,8 +44,8 @@ bool gwsLeverDecode(const uint8_t* data, LeverEvents* events) {
 
     events->stepsTowardDrive = gateStep(currentPosition, position);
 
-    events->paddleUp = position == LEVER_SIDE_UP && currentPosition != LEVER_SIDE_UP;
-    events->paddleDown = position == LEVER_SIDE_DOWN && currentPosition != LEVER_SIDE_DOWN;
+    events->paddleUpHeld = position == LEVER_SIDE_UP;
+    events->paddleDownHeld = position == LEVER_SIDE_DOWN;
 
     events->parkButtonPressed = data[3] == GWS_PARK_BUTTON_PRESSED;
 

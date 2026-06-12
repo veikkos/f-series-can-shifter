@@ -47,7 +47,7 @@ When no telemetry has arrived from the game for 5 seconds (game closed, or sitti
 - Shift up: push the selector down
 - Shift down: push the selector up
 
-Gear buttons are held while the gear is engaged; no gear button held means neutral, so neutral needs no binding of its own. The Automatic/Sequential switch is likewise held while the lever sits in the manual gate, released for automatic.
+Gear buttons are held while the gear is engaged; no gear button held means neutral, so neutral needs no binding of its own. The Automatic/Sequential switch is likewise held while the lever sits in the manual gate, released for automatic, and the shift up/down buttons are held for as long as the lever is held in its detent.
 
 Normal synced operation resumes by itself as soon as telemetry flows again.
 

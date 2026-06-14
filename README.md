@@ -38,7 +38,7 @@ Shifter uses same binary protocol and proxy as the [cluster project](https://git
 
 ### Configuration mode
 
-When no telemetry has arrived from the game for 5 seconds (proxy is not on), the lever automatically acts as a plain button box: lever moves still press the gamepad buttons, but the lever state is never forced to match the stale game state. Use this to bind the lever's gamepad buttons in the game.
+When no telemetry has arrived from the game for 5 seconds (proxy is not on or the game is not responding), the lever automatically goes into configuration mode. Use this to bind the lever's gamepad buttons in the game.
 
 ### BeamNG.drive
 
@@ -54,7 +54,7 @@ Bind the lever's gamepad buttons in BeamNG's controller settings as follows:
 | Push in M/S     | Gear down |
 | Pull in M/S     | Gear up   |
 
-Manual should not be binded explicitly. BeamNG will automatically engage manual if gears are changed in Sport mode.
+Manual should not be bound explicitly. BeamNG will automatically engage manual mode if gears are changed in Sport mode.
 
 ## Credits
 

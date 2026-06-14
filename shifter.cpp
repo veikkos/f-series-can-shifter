@@ -83,17 +83,18 @@ static bool gearButton(GwsGear gear, GamepadButton* button) {
     }
 }
 
-// Hold the selected gear's button, no button held means neutral. Releases
-// come first so two gears are never held at once
-static void pressGearButton(GwsGear gear) {
-    if (gear != GWS_REVERSE) holdButton(BTN_GEAR_REVERSE, false);
-    if (gear != GWS_DRIVE)   holdButton(BTN_GEAR_DRIVE, false);
-    if (gear != GWS_PARK)    holdButton(BTN_GEAR_PARK, false);
+// Drive the gamepad to reflect the current selection
+static void applyButtons() {
+    GamepadButton target;
+    bool hasTarget = s.manual ? (target = BTN_MODE_MANUAL, true)
+                              : gearButton(s.gear, &target);
 
-    GamepadButton button;
-    if (gearButton(gear, &button)) {
-        holdButton(button, true);
+    static const GamepadButton all[] = {
+        BTN_GEAR_REVERSE, BTN_GEAR_DRIVE, BTN_GEAR_PARK, BTN_MODE_MANUAL };
+    for (GamepadButton b : all) {
+        if (!hasTarget || b != target) holdButton(b, false);
     }
+    if (hasTarget) holdButton(target, true);
 }
 
 void shifterApplyLever(const LeverEvents& events, uint32_t now) {
@@ -102,7 +103,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     if (events.enteredManualGate || events.leftManualGate) {
         s.manual = events.enteredManualGate;
         s.physicalManual = events.enteredManualGate;
-        holdButton(BTN_MODE_MANUAL, s.manual);
+        applyButtons();
         openRequest(s.modeRequest, now);
     }
 
@@ -111,7 +112,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
         GwsGear stepped = stepGear(shifterTargetGear(), events.stepsTowardDrive);
         if (stepped != s.gear) {
             s.gear = stepped;
-            pressGearButton(stepped);
+            applyButtons();
             openRequest(s.gearRequest, now);
         }
     }
@@ -123,7 +124,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
         s.gear = GWS_PARK;
-        pressGearButton(GWS_PARK);
+        applyButtons();
         openRequest(s.gearRequest, now);
     }
 }
@@ -151,13 +152,13 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
             s.gear = GWS_TRANSITIONAL;
         }
         s.manual = gameManual;
-        holdButton(BTN_MODE_MANUAL, gameManual);
+        applyButtons();
         s.modeRequest.pending = false;
     }
 
     if (adoptTick(s.gearRequest, shifterTargetGear() == gameGear, now)) {
         s.gear = gameGear;
-        pressGearButton(gameGear);
+        applyButtons();
         s.gearRequest.pending = false;
     }
 

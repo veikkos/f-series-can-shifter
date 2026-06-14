@@ -47,6 +47,12 @@ python3 -m http.server 8000     # run from the simulator/ directory
 
 Then open <http://localhost:8000/web/>.
 
+## Develop with live reload
+
+`./watch.sh` (needs Node) serves the page and reloads the browser on changes:
+firmware C/C++ edits trigger a rebuild, `web/` edits reload directly. It runs
+the initial build itself, so use it instead of the build/serve steps above.
+
 ## Using it
 
 - **Lever** buttons tip the lever toward Drive/Reverse, move into/out of the

@@ -7,7 +7,7 @@ const DISPLAY_FLASH = 0x08;
 const DISPLAY = { 0x20: 'park', 0x40: 'reverse', 0x60: 'neutral', 0x80: 'drive', 0x81: 'drive_ms' };
 const BACKLIGHT_FULL = 0xff;
 
-const BUTTON_NAMES = ['Reverse', 'Drive', 'Manual', 'Paddle Up', 'Paddle Down', 'Park'];
+const BUTTON_NAMES = ['Reverse', 'Drive', 'Sport', 'Paddle Up', 'Paddle Down', 'Park'];
 
 createSim().then((Module) => {
   // --- Bind exported C functions -----------------------------------------

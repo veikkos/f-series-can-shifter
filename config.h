@@ -1,5 +1,15 @@
 #pragma once
 
+// Simulator (Emscripten/WASM) build: select the host backends and skip the
+// hardware adapter and board checks below. emcc defines __EMSCRIPTEN__.
+#if defined(__EMSCRIPTEN__)
+    #define GWS_SIMULATOR
+    #define USE_CAN_WASM
+    #define GWS_BOARD_WASM
+#endif
+
+#if !defined(GWS_SIMULATOR)
+
 // CAN adapter: pick exactly one option below.
 // USE_MCP_CAN_SPI and USE_FLEXCAN_T4 are mutually exclusive.
 
@@ -40,6 +50,8 @@
 #else
     #error "Unsupported board: the gamepad requires an ATmega32u4 (Micro/Leonardo) or Teensy 4.x"
 #endif
+
+#endif // !GWS_SIMULATOR
 
 // The game counts as disconnected when no valid telemetry frame has arrived
 // within this time. While disconnected the lever acts as a plain button box

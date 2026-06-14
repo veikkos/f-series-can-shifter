@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BMW GWS shifter simulator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>BMW GWS shifter simulator</h1>
+    <p class="sub">Runs the real firmware logic (compiled to WebAssembly). Lever moves feed synthesized CAN
+      position frames; game telemetry is encoded into the real serial protocol.</p>
+  </header>
+
+  <main>
+    <!-- Shifter visual -->
+    <section class="panel shifter-panel">
+      <div id="shifter" class="shifter">
+        <img id="base" class="base" src="../assets/shifter.png" alt="GWS lever" />
+        <img class="overlay" data-gear="park" src="../assets/park.png" alt="" />
+        <img class="overlay" data-gear="reverse" src="../assets/reverse.png" alt="" />
+        <img class="overlay" data-gear="neutral" src="../assets/neutral.png" alt="" />
+        <img class="overlay" data-gear="drive" src="../assets/drive.png" alt="" />
+        <img class="overlay" data-gear="ms" src="../assets/ms.png" alt="" />
+      </div>
+      <div class="status">
+        <span id="conn-pill" class="pill">…</span>
+        <span id="mismatch-pill" class="pill hidden">Gate/mode mismatch</span>
+        <span id="backlight-pill" class="pill">Backlight</span>
+      </div>
+    </section>
+
+    <!-- Controls + joystick -->
+    <section class="panel controls-panel">
+      <div class="group">
+        <h2>Joystick buttons</h2>
+        <div class="leds">
+          <div class="led" data-bit="0"><span class="dot"></span>Reverse</div>
+          <div class="led" data-bit="1"><span class="dot"></span>Drive</div>
+          <div class="led" data-bit="2"><span class="dot"></span>Manual</div>
+          <div class="led" data-bit="3"><span class="dot"></span>Paddle&nbsp;Up</div>
+          <div class="led" data-bit="4"><span class="dot"></span>Paddle&nbsp;Down</div>
+          <div class="led" data-bit="5"><span class="dot"></span>Park</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Lever <span id="gate-label" class="muted"></span></h2>
+        <div class="btn-row">
+          <button id="rev2" class="lever-btn">▲▲ Reverse&nbsp;+2</button>
+          <button id="rev1" class="lever-btn">▲ Reverse&nbsp;+1</button>
+        </div>
+        <div class="btn-row">
+          <button id="drv1" class="lever-btn">▼ Drive&nbsp;+1</button>
+          <button id="drv2" class="lever-btn">▼▼ Drive&nbsp;+2</button>
+        </div>
+        <div class="btn-row">
+          <button id="enter-ms" class="lever-btn">Enter M/S →</button>
+          <button id="exit-ms" class="lever-btn">← Exit M/S</button>
+        </div>
+        <div class="btn-row">
+          <button id="paddle-up" class="lever-btn hold">Paddle + (hold)</button>
+          <button id="paddle-down" class="lever-btn hold">Paddle − (hold)</button>
+        </div>
+        <div class="btn-row">
+          <button id="park-btn" class="lever-btn wide">P — Park button</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <h2>Game telemetry (mock serial)</h2>
+        <label class="field">
+          <span>Gear</span>
+          <select id="gear-sel">
+            <option value="0">Park</option>
+            <option value="1">Reverse</option>
+            <option value="2">Neutral</option>
+            <option value="3">Drive (automatic)</option>
+            <option value="4">Drive (manual)</option>
+          </select>
+        </label>
+        <label class="field" id="manual-field">
+          <span>Manual gear</span>
+          <input id="manual-gear" type="number" min="1" max="7" value="1" />
+        </label>
+        <label class="field checkbox"><input id="sport" type="checkbox" /><span>Sport mode</span></label>
+        <label class="field checkbox"><input id="lights" type="checkbox" checked /><span>Low beam (backlight)</span></label>
+        <label class="field checkbox"><input id="connected" type="checkbox" checked /><span>Game connected</span></label>
+      </div>
+    </section>
+  </main>
+
+  <script src="simulator.js"></script>
+  <script src="main.js"></script>
+</body>
+</html>

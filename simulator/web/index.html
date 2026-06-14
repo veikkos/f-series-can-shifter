@@ -18,6 +18,7 @@
     <section class="panel shifter-panel">
       <div id="shifter" class="shifter">
         <img id="base" class="base" src="../assets/shifter.png" alt="GWS lever" />
+        <img class="base backlight" src="../assets/shifter_backlight.png" alt="" />
         <img class="overlay" data-gear="park" src="../assets/park.png" alt="" />
         <img class="overlay" data-gear="reverse" src="../assets/reverse.png" alt="" />
         <img class="overlay" data-gear="neutral" src="../assets/neutral.png" alt="" />
@@ -76,8 +77,8 @@
             <option value="0">Park</option>
             <option value="1">Reverse</option>
             <option value="2">Neutral</option>
-            <option value="3">Drive (automatic)</option>
-            <option value="4">Drive (manual)</option>
+            <option value="3">Drive (D)</option>
+            <option value="4">Drive (M/S)</option>
           </select>
         </label>
         <label class="field" id="manual-field">
@@ -87,6 +88,7 @@
         <label class="field checkbox"><input id="sport" type="checkbox" /><span>Sport mode</span></label>
         <label class="field checkbox"><input id="lights" type="checkbox" checked /><span>Low beam (backlight)</span></label>
         <label class="field checkbox"><input id="connected" type="checkbox" checked /><span>Game connected</span></label>
+        <label class="field checkbox"><input id="responding" type="checkbox" checked /><span>Game responding</span></label>
       </div>
     </section>
   </main>

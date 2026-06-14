@@ -54,8 +54,8 @@ main {
   height: 100%;
   -webkit-user-drag: none;
 }
-.base { transition: filter 0.15s ease; }
-.shifter.backlight-off .base { filter: brightness(0.45) saturate(0.8); }
+.base.backlight { opacity: 0; transition: opacity 0.15s ease; }
+.shifter.backlit .base.backlight { opacity: 1; }
 .overlay { opacity: 0; transition: opacity 0.05s linear; }
 .overlay.on { opacity: 1; }
 
@@ -127,3 +127,7 @@ main {
 .field.checkbox { justify-content: flex-start; }
 .field.checkbox input { width: 16px; height: 16px; }
 .field.checkbox span { color: var(--text); }
+
+/* Controls the simulated game drives while "Game responding" is on */
+.field select:disabled, .field input:disabled { opacity: 0.5; cursor: not-allowed; }
+.field:has(:disabled) > span { opacity: 0.5; }

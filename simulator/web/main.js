@@ -81,6 +81,7 @@ createSim().then((Module) => {
   const sport = $('sport');
   const lights = $('lights');
   const connected = $('connected');
+  const responding = $('responding');
 
   const syncManualVisible = () => {
     manualField.style.display = gearSel.value === '4' ? '' : 'none';
@@ -98,6 +99,51 @@ createSim().then((Module) => {
   sim.setLights(lights.checked ? 1 : 0);
   sim.setConnected(connected.checked ? 1 : 0);
   syncManualVisible();
+
+  // --- Simulated game -----------------------------------------------------
+  // With "Game responding" on, the host game reads the firmware's bound
+  // gamepad buttons and updates its gear just like a real game would, closing
+  // the loop back to the indicator. The firmware holds one gear/mode button at
+  // a time (see shifter.cpp applyButtons), so the held mask maps straight to a
+  // gear; paddles are momentary, so a rising edge is one manual shift.
+  const BTN = { REVERSE: 0, DRIVE: 1, MANUAL: 2, PADDLE_UP: 3, PADDLE_DOWN: 4, PARK: 5 };
+  let prevMask = 0;
+  const held = (mask, b) => (mask & (1 << b)) !== 0;
+
+  function gameRespond(mask) {
+    const rising = (b) => held(mask, b) && !held(prevMask, b);
+    const falling = (b) => !held(mask, b) && held(prevMask, b);
+
+    // The M/S side gate drives the Sport flag: on entering D->M/S, off again on
+    // leaving M/S->D or as soon as the first manual shift demotes it to manual
+    if (rising(BTN.MANUAL)) sport.checked = true;
+    if (falling(BTN.MANUAL)) sport.checked = false;
+
+    let manual = +manualGear.value;
+    if (held(mask, BTN.MANUAL)) {
+      if (rising(BTN.PADDLE_UP)) { manual = Math.min(manual + 1, +manualGear.max); sport.checked = false; }
+      if (rising(BTN.PADDLE_DOWN)) { manual = Math.max(manual - 1, +manualGear.min); sport.checked = false; }
+    }
+
+    // Engaged gear from the single held gear/mode button (none held -> Neutral)
+    let sel;
+    if (held(mask, BTN.PARK)) sel = 0;
+    else if (held(mask, BTN.REVERSE)) sel = 1;
+    else if (held(mask, BTN.MANUAL)) sel = 4;
+    else if (held(mask, BTN.DRIVE)) sel = 3;
+    else sel = 2;
+
+    // Drive the existing controls + bridge setters, only on change
+    if (+gearSel.value !== sel) { gearSel.value = String(sel); sim.setGear(sel); syncManualVisible(); }
+    if (+manualGear.value !== manual) { manualGear.value = String(manual); sim.setManualGear(manual); }
+    sim.setSport(sport.checked ? 1 : 0);
+  }
+
+  // While responding, the game owns these controls; show them as read-only
+  const drivenControls = [gearSel, manualGear, sport];
+  const applyResponding = () => drivenControls.forEach((el) => (el.disabled = responding.checked));
+  responding.addEventListener('change', applyResponding);
+  applyResponding();
 
   // --- Render loop --------------------------------------------------------
   function setOverlay(name, on) {
@@ -120,15 +166,19 @@ createSim().then((Module) => {
       setOverlay(name, active === name && visible);
     }
 
-    // Backlight dims the panel; the gear LED stays lit
+    // Backlight swaps in the illuminated shifter image; the gear LED stays lit
     const backlit = sim.backlight() === BACKLIGHT_FULL;
-    shifter.classList.toggle('backlight-off', !backlit);
+    shifter.classList.toggle('backlit', backlit);
     backlightPill.textContent = backlit ? 'Backlight on' : 'Backlight off';
     backlightPill.className = 'pill ' + (backlit ? 'ok' : 'off');
 
     // Joystick buttons
     const mask = sim.buttons();
     leds.forEach((led, i) => led.classList.toggle('on', (mask & (1 << i)) !== 0));
+
+    // Let the simulated game react to the buttons, then remember the edge state
+    if (responding.checked) gameRespond(mask);
+    prevMask = mask;
 
     // Status pills
     const conn = sim.connected() === 1;

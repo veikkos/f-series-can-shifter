@@ -50,14 +50,16 @@ createSim().then((Module) => {
 
   const tipButtons = ['rev1', 'rev2', 'drv1', 'drv2'].map($);
   const paddleButtons = [$('paddle-up'), $('paddle-down')];
+  const enterMsBtn = $('enter-ms');
+  const exitMsBtn = $('exit-ms');
 
   // --- Lever controls -----------------------------------------------------
   $('rev1').addEventListener('click', () => sim.tipReverse(1));
   $('rev2').addEventListener('click', () => sim.tipReverse(2));
   $('drv1').addEventListener('click', () => sim.tipDrive(1));
   $('drv2').addEventListener('click', () => sim.tipDrive(2));
-  $('enter-ms').addEventListener('click', () => sim.enterMs());
-  $('exit-ms').addEventListener('click', () => sim.leaveMs());
+  enterMsBtn.addEventListener('click', () => sim.enterMs());
+  exitMsBtn.addEventListener('click', () => sim.leaveMs());
   $('park-btn').addEventListener('click', () => sim.park());
 
   // Paddles are momentary: held while the pointer is down on the button
@@ -106,15 +108,15 @@ createSim().then((Module) => {
     sim.tick(now);
 
     const display = sim.displayByte();
-    const gate = sim.leverGate(); // 1 = M/S side gate
+    const inMs = sim.leverGate() === 1; // lever in the M/S side gate
     const flashing = (display & DISPLAY_FLASH) !== 0;
     const code = display & ~DISPLAY_FLASH;
     let active = DISPLAY[code] || null;
-    if (active === 'drive_ms') active = gate === 1 ? 'ms' : 'drive';
+    if (active === 'drive_ms') active = inMs ? 'ms' : 'drive';
 
     // Blink the lit segment at ~2.5 Hz while the firmware sets the flash bit
     const visible = !flashing || Math.floor(now / 200) % 2 === 0;
-    for (const name of ['park', 'reverse', 'neutral', 'drive', 'ms']) {
+    for (const name of Object.keys(overlays)) {
       setOverlay(name, active === name && visible);
     }
 
@@ -134,15 +136,14 @@ createSim().then((Module) => {
     connPill.className = 'pill ' + (conn ? 'ok' : 'off');
 
     const mismatch = sim.mismatch() === 1;
-    mismatchPill.classList.toggle('hidden', !mismatch);
     mismatchPill.className = 'pill warn' + (mismatch ? '' : ' hidden');
 
     // Gate-dependent control availability
-    gateLabel.textContent = gate === 1 ? '— in M/S gate' : '— in auto gate';
-    tipButtons.forEach((b) => (b.disabled = gate === 1));
-    paddleButtons.forEach((b) => (b.disabled = gate !== 1));
-    $('enter-ms').disabled = gate === 1;
-    $('exit-ms').disabled = gate !== 1;
+    gateLabel.textContent = inMs ? '— in M/S gate' : '— in auto gate';
+    tipButtons.forEach((b) => (b.disabled = inMs));
+    paddleButtons.forEach((b) => (b.disabled = !inMs));
+    enterMsBtn.disabled = inMs;
+    exitMsBtn.disabled = !inMs;
 
     requestAnimationFrame(render);
   }

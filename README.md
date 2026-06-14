@@ -49,10 +49,12 @@ Bind the lever's gamepad buttons in BeamNG's controller settings as follows:
 | Park            | 1st gear  |
 | Drive           | 2nd gear  |
 | Sport           | 3rd gear  |
-| Manual          | 6th gear  |
+| <s>Manual</s>   | <s>6th gear</s>  |
 | Reverse         | Reverse   |
 | Push in M/S     | Gear down |
 | Pull in M/S     | Gear up   |
+
+Manual should not be binded explicitly. BeamNG will automatically engage manual if gears are changed in Sport mode.
 
 ## Credits
 

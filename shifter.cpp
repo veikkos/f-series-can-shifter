@@ -166,6 +166,16 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
     // lever between the side and centre gates, so flag the disagreement for the
     // indicator to blink until the lever is cycled
     s.modeMismatch = s.physicalManual != gameManual;
+
+    // TRANSITIONAL is only a stand-in for Drive while the physical gate and the
+    // game's mode disagree, forcing a plain flashing D instead of M/S. Once they
+    // line up again collapse it back to a real Drive; otherwise it sticks (the
+    // game sitting in Drive keeps the gear request matched, so it is never
+    // adopted away) and the side gate can never light M/S again
+    if (s.gear == GWS_TRANSITIONAL && !s.modeMismatch) {
+        s.gear = GWS_DRIVE;
+        applyButtons();
+    }
 }
 
 bool shifterConnected() {

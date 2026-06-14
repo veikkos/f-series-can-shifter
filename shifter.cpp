@@ -36,15 +36,19 @@ static struct {
     SyncRequest modeRequest;
 } s;
 
-// Step the gear along the R-N-D gate: positive steps toward drive, negative
-// toward reverse. Park sits at the reverse end of the gate and is engaged only
-// via the park button, so the clamp keeps tips from ever landing back in park
+// From Park the lever sits at the centre with Neutral on either side, so the
+// first detent in either direction lands on Neutral and only the second reaches
+// Reverse or Drive (R-N-P-N-D). That first detent is spent as a Neutral buffer
 static GwsGear stepGear(GwsGear gear, int steps) {
     static const GwsGear ladder[] = { GWS_REVERSE, GWS_NEUTRAL, GWS_DRIVE };
-    GwsGear current = (gear == GWS_PARK) ? GWS_REVERSE : gear;
-    int idx = 0; // REVERSE
-    for (int i = 0; i < 3; i++) {
-        if (ladder[i] == current) idx = i;
+    int idx = 1; // NEUTRAL: also Park's centre rest
+    if (gear == GWS_PARK) {
+        if (steps > 0) steps -= 1;      // first down detent buffers to Neutral
+        else if (steps < 0) steps += 1; // first up detent buffers to Neutral
+    } else {
+        for (int i = 0; i < 3; i++) {
+            if (ladder[i] == gear) idx = i;
+        }
     }
     idx += steps;
     if (idx < 0) idx = 0;

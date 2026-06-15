@@ -66,17 +66,17 @@ static void emitLeverFrame() {
 }
 
 // --- GWS self-return ------------------------------------------------------
-// The real selector drives its own lever back out of the M/S side gate when
-// the indicator shows a plain D (DISPLAY_DRIVE) rather than the M/S-capable
-// variant (DISPLAY_DRIVE_MS): a plain D means it should not be in the side
-// gate. Model that motor travel so the side gate empties on its own here too.
+// The lever belongs in the M/S side gate only while the indicator is the
+// M/S-capable Drive (DISPLAY_DRIVE_MS). Any other indication — P, R, N, or a
+// plain transitional D — means it should be at centre, so the real selector
+// drives its own lever back. Model that motor travel here too.
 static const uint32_t LEVER_RETURN_MS = 400; // modelled motor travel time
 static bool g_returning = false;
 static uint32_t g_returnStartMs = 0;
 
 static void gwsSelfReturn() {
     uint8_t code = wasmCanDisplayByte() & ~DISPLAY_FLASH;
-    bool wantsCentre = g_restPos == LEVER_CENTRE_SIDE && code == DISPLAY_DRIVE;
+    bool wantsCentre = g_restPos == LEVER_CENTRE_SIDE && code != DISPLAY_DRIVE_MS;
     if (!wantsCentre) {
         g_returning = false;
         return;

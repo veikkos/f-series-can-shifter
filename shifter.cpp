@@ -124,8 +124,10 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
         s.gear = GWS_PARK;
+        s.manual = false;
         applyButtons();
         openRequest(s.gearRequest, now);
+        openRequest(s.modeRequest, now);
     }
 }
 
@@ -147,10 +149,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
     }
 
     if (adoptTick(s.modeRequest, s.manual == gameManual, now)) {
-        if (s.modeRequest.pending) {
-            // The lever's mode request went unanswered, the gear is uncertain
-            s.gear = GWS_TRANSITIONAL;
-        } else if (s.physicalManual && !gameManual) {
+        if (s.physicalManual && !gameManual) {
             // The game dropped manual on its own while the lever still sits in
             // the side gate. Show a plain D (TRANSITIONAL) instead of M/S: that
             // tells the GWS it should not be in the side gate, so it drives its

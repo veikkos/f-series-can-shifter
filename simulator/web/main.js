@@ -9,6 +9,10 @@ const BACKLIGHT_FULL = 0xff;
 
 const BUTTON_NAMES = ['Reverse', 'Drive', 'Sport', 'Paddle Up', 'Paddle Down', 'Park'];
 
+// Raw firmware gear state (GwsGear in types.h) — surfaces TRANSITIONAL, which
+// is otherwise invisible because the indicator shows it as a plain flashing D.
+const GEAR_STATE = { '-1': 'Reverse', 0: 'Neutral', 1: 'Drive', 2: 'Transitional', 3: 'Park' };
+
 createSim().then((Module) => {
   // --- Bind exported C functions -----------------------------------------
   const c = (name, ret, args) => Module.cwrap(name, ret, args);
@@ -30,6 +34,7 @@ createSim().then((Module) => {
     displayByte: c('sim_display_byte', 'number', []),
     backlight: c('sim_backlight', 'number', []),
     buttons: c('sim_buttons', 'number', []),
+    gear: c('sim_gear', 'number', []),
     connected: c('sim_connected', 'number', []),
     mismatch: c('sim_mismatch', 'number', []),
     leverGate: c('sim_lever_gate', 'number', []),
@@ -188,8 +193,9 @@ createSim().then((Module) => {
     const mismatch = sim.mismatch() === 1;
     mismatchPill.className = 'pill warn' + (mismatch ? '' : ' hidden');
 
-    // Gate-dependent control availability
-    gateLabel.textContent = inMs ? '— in M/S gate' : '— in auto gate';
+    // Gate-dependent control availability, plus the raw firmware gear state
+    const gearState = GEAR_STATE[sim.gear()] || '?';
+    gateLabel.textContent = `— ${inMs ? 'in M/S gate' : 'in auto gate'} · ${gearState}`;
     tipButtons.forEach((b) => (b.disabled = inMs));
     paddleButtons.forEach((b) => (b.disabled = !inMs));
     enterMsBtn.disabled = inMs;

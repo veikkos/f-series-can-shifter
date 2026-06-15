@@ -65,6 +65,32 @@ static void emitLeverFrame() {
     wasmCanQueuePosition(data);
 }
 
+// --- GWS self-return ------------------------------------------------------
+// The real selector drives its own lever back out of the M/S side gate when
+// the indicator shows a plain D (DISPLAY_DRIVE) rather than the M/S-capable
+// variant (DISPLAY_DRIVE_MS): a plain D means it should not be in the side
+// gate. Model that motor travel so the side gate empties on its own here too.
+static const uint32_t LEVER_RETURN_MS = 400; // modelled motor travel time
+static bool g_returning = false;
+static uint32_t g_returnStartMs = 0;
+
+static void gwsSelfReturn() {
+    uint8_t code = wasmCanDisplayByte() & ~DISPLAY_FLASH;
+    bool wantsCentre = g_restPos == LEVER_CENTRE_SIDE && code == DISPLAY_DRIVE;
+    if (!wantsCentre) {
+        g_returning = false;
+        return;
+    }
+    if (!g_returning) {
+        g_returning = true;
+        g_returnStartMs = g_now;
+    } else if (g_now - g_returnStartMs >= LEVER_RETURN_MS) {
+        g_restPos = LEVER_CENTRE_MIDDLE; // lever clicks into Drive
+        g_heldPaddle = 0;
+        g_returning = false;
+    }
+}
+
 // --- Game state selection -------------------------------------------------
 static int g_gearSel = 0;     // 0 Park, 1 Reverse, 2 Neutral, 3 Drive(auto), 4 Drive(manual)
 static bool g_sport = false;
@@ -104,6 +130,7 @@ EMSCRIPTEN_KEEPALIVE void sim_init() {
     g_parkOneShot = false;
     g_transHead = g_transTail = 0;
     g_counter = 0;
+    g_returning = false;
     setup();
 }
 
@@ -119,6 +146,10 @@ EMSCRIPTEN_KEEPALIVE void sim_tick(double now_ms) {
     }
 
     loop();
+
+    // After the firmware has updated the indicator, let the modelled selector
+    // pull its lever back out of the side gate if a plain D is being shown
+    gwsSelfReturn();
 }
 
 EMSCRIPTEN_KEEPALIVE void sim_tip_drive(int detents) {
@@ -164,6 +195,7 @@ EMSCRIPTEN_KEEPALIVE void sim_set_connected(int on) { g_connected = on != 0; }
 EMSCRIPTEN_KEEPALIVE int sim_display_byte() { return wasmCanDisplayByte(); }
 EMSCRIPTEN_KEEPALIVE int sim_backlight() { return wasmCanBacklightByte(); }
 EMSCRIPTEN_KEEPALIVE int sim_buttons() { return wasmGamepadMask(); }
+EMSCRIPTEN_KEEPALIVE int sim_gear() { return (int)shifterGear(); }
 EMSCRIPTEN_KEEPALIVE int sim_connected() { return shifterConnected() ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE int sim_mismatch() { return shifterModeMismatch() ? 1 : 0; }
 EMSCRIPTEN_KEEPALIVE int sim_lever_gate() { return g_restPos == LEVER_CENTRE_SIDE ? 1 : 0; }

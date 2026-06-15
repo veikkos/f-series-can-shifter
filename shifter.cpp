@@ -150,6 +150,12 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
         if (s.modeRequest.pending) {
             // The lever's mode request went unanswered, the gear is uncertain
             s.gear = GWS_TRANSITIONAL;
+        } else if (s.physicalManual && !gameManual) {
+            // The game dropped manual on its own while the lever still sits in
+            // the side gate. Show a plain D (TRANSITIONAL) instead of M/S: that
+            // tells the GWS it should not be in the side gate, so it drives its
+            // lever back to centre. Stays TRANSITIONAL until the gate realigns.
+            s.gear = GWS_TRANSITIONAL;
         }
         s.manual = gameManual;
         applyButtons();

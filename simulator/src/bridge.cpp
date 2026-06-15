@@ -1,8 +1,10 @@
 #include <emscripten.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <string.h>
 #include "config.h"
 #include "types.h"
+#include "serial.h"
 #include "shifter.h"
 #include "sim_internal.h"
 
@@ -98,27 +100,76 @@ static bool g_lights = true;  // low beam -> backlight on
 static int g_manualGear = 1;  // 1..NUMBER_OF_GEARS
 static bool g_connected = true;
 
-// Push the selected game state straight into s_input via the serial backend
+// --- Binary telemetry frame ----------------------------------------------
+// The simulator speaks the genuine 35-byte serial protocol so serial_binary.cpp
+// decodes it exactly as it would on real hardware. Only the fields that drive
+// the shifter (gear, gear extension, low beam) are modelled; the rest are left
+// at sane idle values.
+#define FRAME_LENGTH 35
+
+static void putU16(uint8_t* p, uint16_t v) {
+    p[0] = (uint8_t)(v & 0xFF);
+    p[1] = (uint8_t)(v >> 8);
+}
+
+// Build the selected game state into a real binary frame and feed it to the
+// firmware's serial port. Gear and the gear-extension byte are chosen so the
+// parser in serial_binary.cpp reconstructs the intended currentGear / explicit
+// manual gear / mode (see its gear logic).
 static void feedGame() {
-    int currentGear = DRIVE;
-    int explicitGear = NONE;
-    int mode = NORMAL;
+    uint8_t gear = NEUTRAL;   // byte 11: 0 = R, 1 = N, 2+ = forward gears
+    char gearExt = 'N';       // byte 26: P/A/M/S/N
     switch (g_gearSel) {
-        case 0: currentGear = PARK; break;
-        case 1: currentGear = REVERSE; break;
-        case 2: currentGear = NEUTRAL; break;
-        case 3: currentGear = DRIVE; break;
-        default: {
-            currentGear = DRIVE;
+        case 0: gearExt = 'P'; break;                         // Park
+        case 1: gear = REVERSE; gearExt = 'N'; break;         // Reverse
+        case 2: gear = NEUTRAL; gearExt = 'N'; break;         // Neutral
+        case 3: gear = 2; gearExt = 'A'; break;               // Drive (automatic)
+        default: {                                            // Drive (manual)
             int mg = g_manualGear;
             if (mg < 1) mg = 1;
             if (mg > NUMBER_OF_GEARS) mg = NUMBER_OF_GEARS;
-            explicitGear = mg; // GEAR_MANUAL: M1 == 1 .. M8 == 8
-            mode = g_sport ? SPORT : NORMAL;
+            gear = (uint8_t)(mg + 1); // parser derives explicit gear = gear - 1
+            gearExt = g_sport ? 'S' : 'M';
             break;
         }
     }
-    wasmGameSet(currentGear, explicitGear, mode, g_lights ? 1 : 0, g_now);
+
+    uint32_t showlights = 0;
+    if (g_lights) showlights |= (1UL << 12); // low beam -> backlight on
+
+    uint8_t f[FRAME_LENGTH];
+    memset(f, 0, sizeof(f));
+
+    f[0] = 'S';
+    // Timestamp (byte 1..6) — arbitrary but valid
+    f[1] = 25; f[2] = 1; f[3] = 1; f[4] = 12; f[5] = 0; f[6] = 0;
+    putU16(&f[7], 0);            // rpm
+    putU16(&f[9], 0);            // speed
+    f[11] = gear;
+    f[12] = 0;                   // water temp
+    f[13] = 0;                   // oil temp
+    putU16(&f[14], 1000);        // fuel (100.0 %)
+    putU16(&f[16], (uint16_t)(showlights & 0xFFFF));
+    f[18] = (uint8_t)((showlights >> 16) & 0xFF);
+    f[19] = (uint8_t)((showlights >> 24) & 0xFF);
+    f[20] = 0;                   // showlights ext
+    putU16(&f[21], 0);           // fuel injection
+    putU16(&f[23], 0);           // custom light
+    f[25] = 0;                   // custom light on
+    f[26] = (uint8_t)gearExt;
+    putU16(&f[27], 0);           // cruise speed
+    f[29] = 0;                   // cruise status
+    f[30] = IG_ON;               // ignition
+    f[31] = 1;                   // engine running
+    putU16(&f[32], 200);         // ambient temp (20.0 C)
+
+    uint8_t checksum = 0;
+    for (int i = 1; i < FRAME_LENGTH - 1; i++) {
+        checksum = (uint8_t)((checksum + f[i]) & 0xFF);
+    }
+    f[FRAME_LENGTH - 1] = checksum;
+
+    wasmSerialFeed(f, FRAME_LENGTH);
 }
 
 extern "C" {
@@ -144,6 +195,17 @@ EMSCRIPTEN_KEEPALIVE void sim_tick(double now_ms) {
     if (g_connected) {
         feedGame();
     }
+
+    // Decode the freshly fed telemetry before loop() so shifterTick() acts on
+    // the current game state this tick. The firmware's loop() runs serialPoll()
+    // *after* shifterTick(), so a frame is normally only acted on the following
+    // iteration. On real hardware loop() spins thousands of times per telemetry
+    // frame, so that lag is invisible; here it would be a full visible tick,
+    // and with the responding game closing the loop it sets up a Park<->Neutral
+    // oscillation at startup. Parsing first models the prior fast iteration that
+    // would already have decoded the frame. loop()'s own serialPoll() then just
+    // finds an empty buffer.
+    serialPoll();
 
     loop();
 

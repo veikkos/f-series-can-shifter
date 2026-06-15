@@ -11,8 +11,8 @@ emcc \
   -I "$ROOT" -I include \
   -O2 -std=c++17 \
   -x c++ "$ROOT/e90-can-shifter.ino" \
-  "$ROOT/shifter.cpp" "$ROOT/gws_lever.cpp" \
-  src/can_adapter_wasm.cpp src/serial_wasm.cpp src/gamepad_wasm.cpp src/bridge.cpp \
+  "$ROOT/shifter.cpp" "$ROOT/gws_lever.cpp" "$ROOT/serial_binary.cpp" \
+  src/can_adapter_wasm.cpp src/host_serial_wasm.cpp src/gamepad_wasm.cpp src/bridge.cpp \
   -s MODULARIZE=1 -s EXPORT_NAME=createSim \
   -s EXPORTED_FUNCTIONS="$EXPORTS" \
   -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap']" \

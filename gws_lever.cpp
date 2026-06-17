@@ -15,6 +15,16 @@ static int downDepth(uint8_t position) {
     return 0;
 }
 
+// The M/S side gate covers its centre rest and both paddle detents; every other
+// position is the auto gate. Deriving the gate from the absolute position means
+// a fast move that skips the CENTRE_SIDE rest frame is still seen as a gate
+// change, rather than being missed because it wasn't the exact rest transition.
+static bool inSideGate(uint8_t position) {
+    return position == LEVER_CENTRE_SIDE ||
+           position == LEVER_SIDE_UP ||
+           position == LEVER_SIDE_DOWN;
+}
+
 // Notches to step when the lever moves between positions: the gear follows the
 // lever deeper into a gate (one per detent) and ignores the spring back toward
 // centre. Robust to the reader repeating or skipping detents.
@@ -37,10 +47,10 @@ bool gwsLeverDecode(const uint8_t* data, LeverEvents* events) {
 
     uint8_t position = data[2];
 
-    events->leftManualGate =
-        currentPosition == LEVER_CENTRE_SIDE && position == LEVER_CENTRE_MIDDLE;
-    events->enteredManualGate =
-        currentPosition == LEVER_CENTRE_MIDDLE && position == LEVER_CENTRE_SIDE;
+    bool wasSide = inSideGate(currentPosition);
+    bool nowSide = inSideGate(position);
+    events->leftManualGate = wasSide && !nowSide;
+    events->enteredManualGate = !wasSide && nowSide;
 
     events->stepsTowardDrive = gateStep(currentPosition, position);
 

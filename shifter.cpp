@@ -87,11 +87,12 @@ static bool gearButton(GwsGear gear, GamepadButton* button) {
 // Drive the gamepad to reflect the current selection
 static void applyButtons() {
     GamepadButton target;
-    bool hasTarget = s.manual ? (target = BTN_MODE_MANUAL, true)
+    bool hasTarget = s.manual ? (target = BTN_MODE_SPORT, true)
                               : gearButton(s.gear, &target);
 
     static const GamepadButton all[] = {
-        BTN_GEAR_REVERSE, BTN_GEAR_DRIVE, BTN_GEAR_PARK, BTN_MODE_MANUAL };
+        BTN_GEAR_REVERSE, BTN_GEAR_DRIVE, BTN_GEAR_PARK,
+        BTN_MODE_SPORT, BTN_MODE_MANUAL };
     for (GamepadButton b : all) {
         if (!hasTarget || b != target) holdButton(b, false);
     }

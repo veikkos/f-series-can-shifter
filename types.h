@@ -69,10 +69,11 @@ static const uint8_t BACKLIGHT_OFF  = 0x00;
 enum GamepadButton : uint8_t {
     BTN_GEAR_REVERSE = 0,
     BTN_GEAR_DRIVE   = 1,
-    BTN_MODE_MANUAL  = 2,
+    BTN_MODE_SPORT   = 2,
     BTN_PADDLE_UP    = 3,
     BTN_PADDLE_DOWN  = 4,
     BTN_GEAR_PARK    = 5,
+    BTN_MODE_MANUAL  = 6,
 };
 
 // Gear the lever has selected.

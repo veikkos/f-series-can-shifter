@@ -7,7 +7,7 @@ const DISPLAY_FLASH = 0x08;
 const DISPLAY = { 0x20: 'park', 0x40: 'reverse', 0x60: 'neutral', 0x80: 'drive', 0x81: 'drive_ms' };
 const BACKLIGHT_FULL = 0xff;
 
-const BUTTON_NAMES = ['Reverse', 'Drive', 'Sport', 'Paddle Up', 'Paddle Down', 'Park'];
+const BUTTON_NAMES = ['Reverse', 'Drive', 'Sport', 'Paddle Up', 'Paddle Down', 'Park', 'Manual'];
 
 // Raw firmware gear state (GwsGear in types.h) — surfaces TRANSITIONAL, which
 // is otherwise invisible because the indicator shows it as a plain flashing D.
@@ -111,30 +111,29 @@ createSim().then((Module) => {
   // the loop back to the indicator. The firmware holds one gear/mode button at
   // a time (see shifter.cpp applyButtons), so the held mask maps straight to a
   // gear; paddles are momentary, so a rising edge is one manual shift.
-  const BTN = { REVERSE: 0, DRIVE: 1, MANUAL: 2, PADDLE_UP: 3, PADDLE_DOWN: 4, PARK: 5 };
+  const BTN = { REVERSE: 0, DRIVE: 1, SPORT: 2, PADDLE_UP: 3, PADDLE_DOWN: 4, PARK: 5, MANUAL: 6 };
   let prevMask = 0;
   const held = (mask, b) => (mask & (1 << b)) !== 0;
 
   function gameRespond(mask) {
     const rising = (b) => held(mask, b) && !held(prevMask, b);
-    const falling = (b) => !held(mask, b) && held(prevMask, b);
 
-    // The M/S side gate drives the Sport flag: on entering D->M/S, off again on
-    // leaving M/S->D or as soon as the first manual shift demotes it to manual
-    if (rising(BTN.MANUAL)) sport.checked = true;
-    if (falling(BTN.MANUAL)) sport.checked = false;
+    // The lever holds Sport on entering D->M/S and switches to Manual on the
+    // first sequential shift, so the game reads its mode from whichever is held
+    const inMs = held(mask, BTN.SPORT) || held(mask, BTN.MANUAL);
+    sport.checked = held(mask, BTN.SPORT);
 
     let manual = +manualGear.value;
-    if (held(mask, BTN.MANUAL)) {
-      if (rising(BTN.PADDLE_UP)) { manual = Math.min(manual + 1, +manualGear.max); sport.checked = false; }
-      if (rising(BTN.PADDLE_DOWN)) { manual = Math.max(manual - 1, +manualGear.min); sport.checked = false; }
+    if (inMs) {
+      if (rising(BTN.PADDLE_UP)) manual = Math.min(manual + 1, +manualGear.max);
+      if (rising(BTN.PADDLE_DOWN)) manual = Math.max(manual - 1, +manualGear.min);
     }
 
     // Engaged gear from the single held gear/mode button (none held -> Neutral)
     let sel;
     if (held(mask, BTN.PARK)) sel = 0;
     else if (held(mask, BTN.REVERSE)) sel = 1;
-    else if (held(mask, BTN.MANUAL)) sel = 4;
+    else if (inMs) sel = 4;
     else if (held(mask, BTN.DRIVE)) sel = 3;
     else sel = 2;
 

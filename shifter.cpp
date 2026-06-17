@@ -29,12 +29,15 @@ static bool adoptTick(SyncRequest& r, bool matches, uint32_t now) {
 static struct {
     GwsGear gear = GWS_NEUTRAL;
     bool manual = false;
+    bool sport = false;          // within the M/S gate, hold Sport (true) vs Manual (false)
+    bool suppressPaddleHold = false; // config-mode binding: swallow the paddle on the demoting flick
     bool connected = false; // game telemetry was fresh on the last tick
     bool physicalManual = false; // lever is physically in the M/S side gate
     bool modeMismatch = false;   // physical gate disagrees with the game's mode
     GEAR_MANUAL gameManualGear = NONE; // game's explicit manual gear, cached for the downshift guard
     SyncRequest gearRequest;
     SyncRequest modeRequest;
+    SyncRequest sportRequest;
 } s;
 
 // From Park the lever sits at the centre with Neutral on either side, so the
@@ -87,7 +90,7 @@ static bool gearButton(GwsGear gear, GamepadButton* button) {
 // Drive the gamepad to reflect the current selection
 static void applyButtons() {
     GamepadButton target;
-    bool hasTarget = s.manual ? (target = BTN_MODE_SPORT, true)
+    bool hasTarget = s.manual ? (target = s.sport ? BTN_MODE_SPORT : BTN_MODE_MANUAL, true)
                               : gearButton(s.gear, &target);
 
     static const GamepadButton all[] = {
@@ -105,6 +108,10 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     if (events.enteredManualGate || events.leftManualGate) {
         s.manual = events.enteredManualGate;
         s.physicalManual = events.enteredManualGate;
+        if (events.enteredManualGate) {
+            s.sport = true; // enter the side gate in Sport, like the GWS
+            openRequest(s.sportRequest, now);
+        }
         applyButtons();
         openRequest(s.modeRequest, now);
     }
@@ -119,14 +126,28 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
         }
     }
 
+    // A sequential paddle pull in the M/S gate demotes Sport to Manual. The flag
+    // keeps it idempotent, so a held detent only demotes once
+    bool paddleHeld = events.paddleUpHeld || events.paddleDownHeld;
+    if (s.manual && s.sport && paddleHeld) {
+        s.sport = false;
+        openRequest(s.sportRequest, now);
+        applyButtons();
+        // In config mode the demoting flick must read as a clean Manual press so
+        // it can be bound in the game, so swallow the paddle until it springs back
+        if (!s.connected) s.suppressPaddleHold = true;
+    }
+    if (!paddleHeld) s.suppressPaddleHold = false;
+
     // Sequential paddles follow the lever in the manual gate: held while the
     // lever is held in a detent, released when it springs back to centre.
     // While the game is connected and already in 1st (or no numbered gear) a
     // downshift would drop below 1st, so swallow it; disconnected the lever is
     // a plain button box and passes the paddle through
     bool blockDownshift = s.connected && s.gameManualGear <= M1;
-    holdButton(BTN_PADDLE_UP, events.paddleUpHeld && !blockDownshift);
-    holdButton(BTN_PADDLE_DOWN, events.paddleDownHeld);
+    bool emitPaddle = !s.suppressPaddleHold;
+    holdButton(BTN_PADDLE_UP, emitPaddle && events.paddleUpHeld && !blockDownshift);
+    holdButton(BTN_PADDLE_DOWN, emitPaddle && events.paddleDownHeld);
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
         s.gear = GWS_PARK;
@@ -137,8 +158,8 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     }
 }
 
-void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh,
-                 GEAR_MANUAL gameManualGear) {
+void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameSport,
+                 bool gameFresh, GEAR_MANUAL gameManualGear) {
     // With no game talking there is nothing to adopt; the lever is a plain
     // button box
     if (!gameFresh) {
@@ -156,6 +177,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
         s.connected = true;
         s.gearRequest.openedMs = now;
         s.modeRequest.openedMs = now;
+        s.sportRequest.openedMs = now;
     }
 
     if (adoptTick(s.modeRequest, s.manual == gameManual, now)) {
@@ -169,6 +191,15 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
         s.manual = gameManual;
         applyButtons();
         s.modeRequest.pending = false;
+    }
+
+    // Within the M/S gate, follow the game's mode (Sport vs Manual) after the
+    // grace period, or immediately when the game changed it on its own
+    if (s.manual && gameManual &&
+        adoptTick(s.sportRequest, s.sport == gameSport, now)) {
+        s.sport = gameSport;
+        applyButtons();
+        s.sportRequest.pending = false;
     }
 
     if (adoptTick(s.gearRequest, shifterTargetGear() == gameGear, now)) {

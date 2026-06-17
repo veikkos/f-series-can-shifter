@@ -35,6 +35,10 @@ static bool gameShifterManual() {
     return s_input.explicitGear != NONE;
 }
 
+static bool gameShifterSport() {
+    return s_input.mode == SPORT;
+}
+
 void sendBacklight() {
     static uint8_t frame[2] = {BACKLIGHT_OFF, 0x00};
     bool lit = s_input.light_lowbeam || s_input.light_highbeam;
@@ -111,7 +115,8 @@ void setup() {
 void loop() {
     sendCanBus();
     uint32_t now = millis();
-    shifterTick(now, gameGear(), gameShifterManual(), serialGameFresh(now), s_input.explicitGear);
+    shifterTick(now, gameGear(), gameShifterManual(), gameShifterSport(),
+                serialGameFresh(now), s_input.explicitGear);
     serialPoll();
     canPoll(handler_table, handler_count);
 }

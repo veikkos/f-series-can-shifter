@@ -126,10 +126,18 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
         }
     }
 
-    // A sequential paddle pull in the M/S gate demotes Sport to Manual. The flag
-    // keeps it idempotent, so a held detent only demotes once
     bool paddleHeld = events.paddleUpHeld || events.paddleDownHeld;
-    if (s.manual && s.sport && paddleHeld) {
+
+    // Don't act on a paddle until the lever is in the M/S gate and, while a game
+    // is connected, the game has acknowledged the side gate (the mode request has
+    // settled). Otherwise a paddle pulled during the D->M/S move lands on Drive
+    // and drops the game to Neutral. Disconnected the lever is a plain button
+    // box, so paddles pass straight through for binding.
+    bool shiftReady = s.manual && (!s.connected || !s.modeRequest.pending);
+
+    // A sequential paddle pull demotes Sport to Manual. The flag keeps it
+    // idempotent, so a held detent only demotes once
+    if (shiftReady && s.sport && paddleHeld) {
         s.sport = false;
         openRequest(s.sportRequest, now);
         applyButtons();
@@ -142,10 +150,9 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     // Sequential paddles follow the lever in the manual gate: held while the
     // lever is held in a detent, released when it springs back to centre.
     // While the game is connected and already in 1st (or no numbered gear) a
-    // downshift would drop below 1st, so swallow it; disconnected the lever is
-    // a plain button box and passes the paddle through
+    // downshift would drop below 1st, so swallow it
     bool blockDownshift = s.connected && s.gameManualGear <= M1;
-    bool emitPaddle = !s.suppressPaddleHold;
+    bool emitPaddle = shiftReady && !s.suppressPaddleHold;
     holdButton(BTN_PADDLE_UP, emitPaddle && events.paddleUpHeld && !blockDownshift);
     holdButton(BTN_PADDLE_DOWN, emitPaddle && events.paddleDownHeld);
 

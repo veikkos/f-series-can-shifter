@@ -30,7 +30,7 @@ static struct {
     GwsGear gear = GWS_NEUTRAL;
     bool manual = false;
     bool sport = false;          // within the M/S gate, hold Sport (true) vs Manual (false)
-    bool suppressPaddleHold = false; // config-mode binding: swallow the paddle on the demoting flick
+    bool suppressPaddleHold = false; // config-mode binding: swallow the paddle on the demoting pull
     bool connected = false; // game telemetry was fresh on the last tick
     bool physicalManual = false; // lever is physically in the M/S side gate
     bool modeMismatch = false;   // physical gate disagrees with the game's mode
@@ -133,7 +133,7 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
         s.sport = false;
         openRequest(s.sportRequest, now);
         applyButtons();
-        // In config mode the demoting flick must read as a clean Manual press so
+        // In config mode the demoting pull must read as a clean Manual press so
         // it can be bound in the game, so swallow the paddle until it springs back
         if (!s.connected) s.suppressPaddleHold = true;
     }
@@ -189,6 +189,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameSport
             s.gear = GWS_TRANSITIONAL;
         }
         s.manual = gameManual;
+        s.sportRequest.pending = false; // mode adopted away, the sport request is moot
         applyButtons();
         s.modeRequest.pending = false;
     }

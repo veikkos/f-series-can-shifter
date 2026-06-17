@@ -16,7 +16,8 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now);
 // reset, in-game paddles). While the game is stale (gameFresh false) nothing
 // is adopted and the lever acts as a plain button box; reconnecting gives a
 // pending lever request a fresh grace period
-void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh);
+void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh,
+                 GEAR_MANUAL gameManualGear);
 
 // Whether game telemetry was fresh on the last tick
 bool shifterConnected();

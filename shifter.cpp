@@ -32,6 +32,7 @@ static struct {
     bool connected = false; // game telemetry was fresh on the last tick
     bool physicalManual = false; // lever is physically in the M/S side gate
     bool modeMismatch = false;   // physical gate disagrees with the game's mode
+    GEAR_MANUAL gameManualGear = NONE; // game's explicit manual gear, cached for the downshift guard
     SyncRequest gearRequest;
     SyncRequest modeRequest;
 } s;
@@ -118,8 +119,12 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     }
 
     // Sequential paddles follow the lever in the manual gate: held while the
-    // lever is held in a detent, released when it springs back to centre
-    holdButton(BTN_PADDLE_UP, events.paddleUpHeld);
+    // lever is held in a detent, released when it springs back to centre.
+    // While the game is connected and already in 1st (or no numbered gear) a
+    // downshift would drop below 1st, so swallow it; disconnected the lever is
+    // a plain button box and passes the paddle through
+    bool blockDownshift = s.connected && s.gameManualGear <= M1;
+    holdButton(BTN_PADDLE_UP, events.paddleUpHeld && !blockDownshift);
     holdButton(BTN_PADDLE_DOWN, events.paddleDownHeld);
 
     if (events.parkButtonPressed && s.gear != GWS_PARK) {
@@ -131,7 +136,8 @@ void shifterApplyLever(const LeverEvents& events, uint32_t now) {
     }
 }
 
-void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh) {
+void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh,
+                 GEAR_MANUAL gameManualGear) {
     // With no game talking there is nothing to adopt; the lever is a plain
     // button box
     if (!gameFresh) {
@@ -139,6 +145,9 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameFresh
         s.modeMismatch = false;
         return;
     }
+
+    // Cache the game's gear so the lever path can guard the downshift paddle
+    s.gameManualGear = gameManualGear;
 
     // On reconnect a request made while disconnected gets a fresh grace
     // period against the live game

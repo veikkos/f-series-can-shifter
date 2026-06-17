@@ -111,7 +111,7 @@ void setup() {
 void loop() {
     sendCanBus();
     uint32_t now = millis();
-    shifterTick(now, gameGear(), gameShifterManual(), serialGameFresh(now));
+    shifterTick(now, gameGear(), gameShifterManual(), serialGameFresh(now), s_input.explicitGear);
     serialPoll();
     canPoll(handler_table, handler_count);
 }

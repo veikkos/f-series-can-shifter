@@ -37,7 +37,7 @@ static int gateStep(uint8_t from, uint8_t to) {
 }
 
 bool gwsLeverDecode(const uint8_t* data, LeverEvents* events) {
-    static uint8_t currentPosition = LEVER_CENTRE_SIDE;
+    static uint8_t currentPosition = LEVER_CENTRE_MIDDLE;
     static int currentCounter = -1;
 
     uint8_t readerCounter = data[1];

@@ -30,7 +30,7 @@ static struct {
     GwsGear gear = GWS_NEUTRAL;
     bool manual = false;
     bool sport = false;          // within the M/S gate, hold Sport (true) vs Manual (false)
-    bool suppressPaddleHold = false; // config-mode binding: swallow the paddle on the demoting pull
+    bool suppressPaddleHold = false; // true while a demoting paddle pull is held, suppressing BTN_PADDLE_* so Manual binds cleanly
     bool connected = false; // game telemetry was fresh on the last tick
     bool physicalManual = false; // lever is physically in the M/S side gate
     bool modeMismatch = false;   // physical gate disagrees with the game's mode
@@ -178,6 +178,7 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameSport
         s.gearRequest.openedMs = now;
         s.modeRequest.openedMs = now;
         s.sportRequest.openedMs = now;
+        s.suppressPaddleHold = false; // a live game should see the held paddle
     }
 
     if (adoptTick(s.modeRequest, s.manual == gameManual, now)) {

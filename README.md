@@ -54,7 +54,9 @@ Bind the lever's gamepad buttons in BeamNG's controller settings as follows:
 | Push in M/S     | Gear down |
 | Pull in M/S     | Gear up   |
 
-Sport and Manual are bound from configuration mode (game not responding). Enter the M/S gate to bind **Sport**; while in M/S, flick a paddle once to bind **Manual** (the paddle itself is suppressed on that first flick so the press is clean); flick again to bind **Gear up** / **Gear down**.
+Gears are bound from configuration mode (game or proxy off).
+
+To bind, first engage and then disengage a gear. Sport is bound by moving the lever to M/S and back. Manual can be bound by having the shifter in M/S and then flicking once up and then disengage M/S. UP/Down shift can be bound in M/S by flicking twice and then disengaging M/S.
 
 ## Credits
 

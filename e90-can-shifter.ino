@@ -41,7 +41,8 @@ static bool gameShifterSport() {
 
 void sendBacklight() {
     static uint8_t frame[2] = {BACKLIGHT_OFF, 0x00};
-    bool lit = s_input.light_lowbeam || s_input.light_highbeam;
+    bool lit = s_input.ignition != IG_OFF &&
+               (s_input.light_lowbeam || s_input.light_highbeam);
     frame[0] = lit ? BACKLIGHT_FULL : BACKLIGHT_OFF;
     canSend(GWS_ID_BACKLIGHT, frame, sizeof(frame));
 }
@@ -89,7 +90,9 @@ void sendCanBus() {
 
     if (current - previous >= 100) {
         sendBacklight();
-        sendGear();
+        if (!(serialGameFresh(current) && s_input.ignition == IG_OFF)) {
+            sendGear();
+        }
         previous = current;
     }
 }

@@ -5,9 +5,18 @@
 // state is adopted back
 static const uint32_t SYNC_GIVE_UP_MS = 3000;
 
+// How long a game-initiated change must persist before it's adopted. Shields
+// the sync from one-frame game transients (e.g. the brief Neutral the game
+// reports while it digests a mode-button swap, which no lever request covers)
+// from being chased. Kept short so genuine game-initiated changes still follow
+// promptly.
+static const uint32_t ADOPT_DEBOUNCE_MS = 100;
+
 struct SyncRequest {
     bool pending = false; // a lever-initiated change is waiting for the game
     uint32_t openedMs = 0;
+    bool mismatching = false;  // a game-initiated mismatch is being debounced
+    uint32_t mismatchSince = 0;
 };
 
 static void openRequest(SyncRequest& r, uint32_t now) {
@@ -15,14 +24,36 @@ static void openRequest(SyncRequest& r, uint32_t now) {
     r.openedMs = now;
 }
 
-// Whether a mismatching game state should be adopted this tick. A match
-// closes the pending request; on adoption the caller closes it
+// Whether a mismatching game state should be adopted this tick. A match closes
+// the request and clears any debounce. While a lever request is pending the
+// game gets the full grace period; otherwise the change is game-initiated and
+// must persist past the debounce window before it's believed, so a one-frame
+// transient is never chased. On adoption the caller updates the held state.
 static bool adoptTick(SyncRequest& r, bool matches, uint32_t now) {
     if (matches) {
         r.pending = false;
+        r.mismatching = false;
         return false;
     }
-    return !r.pending || now - r.openedMs >= SYNC_GIVE_UP_MS;
+
+    if (r.pending) {
+        // Lever asked for this; give the game the full grace period to catch up
+        return now - r.openedMs >= SYNC_GIVE_UP_MS;
+    }
+
+    // Game-initiated mismatch: start the debounce, then adopt only once the new
+    // state has held continuously for the window. Any matching tick in between
+    // resets it via the matches branch above.
+    if (!r.mismatching) {
+        r.mismatching = true;
+        r.mismatchSince = now;
+        return false;
+    }
+    if (now - r.mismatchSince >= ADOPT_DEBOUNCE_MS) {
+        r.mismatching = false;
+        return true;
+    }
+    return false;
 }
 
 // Lever-side state the game is given to engage
@@ -185,6 +216,9 @@ void shifterTick(uint32_t now, GwsGear gameGear, bool gameManual, bool gameSport
         s.gearRequest.openedMs = now;
         s.modeRequest.openedMs = now;
         s.sportRequest.openedMs = now;
+        s.gearRequest.mismatching = false;
+        s.modeRequest.mismatching = false;
+        s.sportRequest.mismatching = false;
         s.suppressPaddleHold = false; // a live game should see the held paddle
     }
 
